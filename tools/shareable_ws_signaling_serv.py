@@ -68,6 +68,8 @@ def accept_and_later_msg_handle(environ, start_response):
         if msg is None:
             break
 
+        print("recieved msg: " + msg)
+        
         splited_msg = msg.split(":")
         channel_signiture = splited_msg[0]
         if channel_signiture.endswith("_chsig") == False:
@@ -75,8 +77,8 @@ def accept_and_later_msg_handle(environ, start_response):
             ws.send("invalid message format. no channel signiture specified.")
             break
 
-        signaling_msg = ''.join(splited_msg[1:])
-        print("recieved signaling_msg: " + signaling_msg)
+        signaling_msg = ':'.join(splited_msg[1:])
+
 
         # new connection (first recieved message)
         if ws not in ws_list:
