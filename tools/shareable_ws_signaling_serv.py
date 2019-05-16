@@ -1,4 +1,4 @@
-
+# coding: utf-8
 import os
 from geventwebsocket.handler import WebSocketHandler
 from gevent import pywsgi, sleep
@@ -33,8 +33,8 @@ class Channel(object):
             try:
                 if s != user_ws:
                     s.send(msg)
-                else:
-                    s.send("ok")
+#                else:
+#                    s.send("ok")
             except:
                 # Possibility to execute code when connection is closed
                 print("a client disconnected.")
@@ -73,24 +73,41 @@ def accept_and_later_msg_handle(environ, start_response):
         if channel_signiture.endswith("_chsig") == False:
             print("invalid message format. no channel signiture specified.")
             ws.send("invalid message format. no channel signiture specified.")
+            break
 
         signaling_msg = ''.join(splited_msg[1:])
+        print("recieved signaling_msg: " + signaling_msg)
 
-        # new connection
+        # new connection (first recieved message)
         if ws not in ws_list:
             # join already existed Channel or create new Channel
             try:
-                if channel_signiture in channel_dict:
-                    channel_dict[channel_signiture].join(ws)
+                if "join" in signaling_msg:
+                    if channel_signiture in channel_dict:
+                        channel_dict[channel_signiture].join(ws)
+                    else:
+                        new_channel = Channel(channel_signiture)
+                        new_channel.join(ws)
+                        channel_dict[channel_signiture] = new_channel
+                    ws_list.append(ws)
+                    continue
                 else:
-                    new_channel = Channel(channel_signiture)
-                    new_channel.join(ws)
-                    channel_dict[channel_signiture] = new_channel
-                ws_list.append(ws)
-                channel_dict[channel_signiture].delegate_msg(ws, signaling_msg)
+                    print("new connection (first message), but not invalid message" + signaling_msg)
+                    break
             except:
                 print("join to " + channel_signiture + " is denided.")
-                ws.send("NG")
+                traceback.print_exc()
+                #ws.send("NG")
+                #ws.send("join to " + channel_signiture + " is denided.")
+                break
+
+        if ws in ws_list:
+            try:
+                channel_dict[channel_signiture].delegate_msg(ws, signaling_msg)
+            except:
+                print("delegate msg to " + channel_signiture + " failed.")
+                traceback.print_exc()
+                #ws.send("NG")
                 #ws.send("join to " + channel_signiture + " is denided.")
                 break
 
