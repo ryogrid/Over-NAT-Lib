@@ -1,1 +1,2 @@
-aiortc-dc >= 0.5.3
+aiortc-dc >= 0.5.4
+gevent-websocket >= 0.10.1
