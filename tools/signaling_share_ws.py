@@ -47,9 +47,10 @@ def object_to_string(obj):
     return json.dumps(message, sort_keys=True)
 
 class WebsocketSignaling:
-    def __init__(self, host, port):
+    def __init__(self, host, port, gid):
         self._host = host
         self._port = port
+        self._gid_str = gid
         self._websocket = None
 
     async def connect(self):
@@ -80,7 +81,7 @@ class WebsocketSignaling:
 
     async def send(self, descr):
         data = object_to_string(descr)
-        await self._websocket.send('aaa_chsig:' + data + '\n')
+        await self._websocket.send(self._gid_str + ':' + data + '\n')
 
 def add_signaling_arguments(parser):
     """
@@ -92,12 +93,14 @@ def add_signaling_arguments(parser):
                         help='Signaling host (share-websocket only)')
     parser.add_argument('--signaling-port', default=1234,
                         help='Signaling port (share-websocket only)')
+    parser.add_argument('--signaling-gid', default='abc',
+                        help='global unique ID shared with person which communicate to (share-websocket only)')
 
 def create_signaling(args):
     """
     Create a signaling method based on command-line arguments.
     """
     if args.signaling == 'share-websocket':
-        return WebsocketSignaling(args.signaling_host, args.signaling_port)
+        return WebsocketSignaling(args.signaling_host, args.signaling_port, str(args.signaling_gid) + "_chsig")
     else:
         raise Exception("unknown signaling at singnaling_share_ws module.")
