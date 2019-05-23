@@ -17,7 +17,8 @@ from os import path
 #sys.path.append(path.dirname(path.abspath(__file__)) + "/../../")
 
 from aiortcdc import RTCPeerConnection, RTCSessionDescription
-from aiortcdc.contrib.signaling_share_ws import add_signaling_arguments, create_signaling
+#from aiortcdc.contrib.signaling_share_ws import add_signaling_arguments, create_signaling
+from signaling_share_ws import add_signaling_arguments, create_signaling
 
 async def consume_signaling(pc, signaling):
     while True:
