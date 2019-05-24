@@ -97,6 +97,7 @@ async def run_offer(pc, signaling, fp):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Data channel file transfer')
+    parser.add_argument('gid')
     parser.add_argument('role', choices=['send', 'receive'])
     parser.add_argument('filename')
     parser.add_argument('--verbose', '-v', action='count')

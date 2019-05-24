@@ -93,14 +93,12 @@ def add_signaling_arguments(parser):
                         help='Signaling host (share-websocket only)')
     parser.add_argument('--signaling-port', default=1234,
                         help='Signaling port (share-websocket only)')
-    parser.add_argument('--signaling-gid', default='abc',
-                        help='global unique ID shared with person which communicate to (share-websocket only)')
 
 def create_signaling(args):
     """
     Create a signaling method based on command-line arguments.
     """
     if args.signaling == 'share-websocket':
-        return WebsocketSignaling(args.signaling_host, args.signaling_port, str(args.signaling_gid) + "_chsig")
+        return WebsocketSignaling(args.signaling_host, args.signaling_port, str(args.gid) + "_chsig")
     else:
         raise Exception("unknown signaling at singnaling_share_ws module.")
