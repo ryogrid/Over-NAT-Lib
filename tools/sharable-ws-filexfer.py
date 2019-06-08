@@ -23,8 +23,10 @@ from aiortcdc import RTCPeerConnection, RTCSessionDescription
 from signaling_share_ws import add_signaling_arguments, create_signaling
 
 sctp_transport_established = False
+force_exited = False
 
 async def consume_signaling(pc, signaling):
+    global force_exited
     while True:
         obj = await signaling.receive()
 
@@ -35,11 +37,9 @@ async def consume_signaling(pc, signaling):
                 # send answer
                 await pc.setLocalDescription(await pc.createAnswer())
                 await signaling.send(pc.localDescription)
-        elif isinstance(obj, str):
+        elif isinstance(obj, str) and force_exited == False:
             print("string recievd: " + obj)
         else:
-#            print(type(obj))
-#            print(str(obj))
             print('Exiting')
             break
 
@@ -109,12 +109,14 @@ async def run_offer(pc, signaling, fp):
 #     exit()
 
 def ice_establishment_state():
+    global force_exited
     while(sctp_transport_established == False and "failed" not in pc.iceConnectionState):
-        print("ice_establishment_state: " + pc.iceConnectionState)
+        #print("ice_establishment_state: " + pc.iceConnectionState)
         time.sleep(1)
     #signaling.send("sctp_establish_fail")
     if sctp_transport_established == False:
         print("hole punching to remote machine failed.")
+        force_exited = True
         try:
             loop.stop()
             loop.close()
