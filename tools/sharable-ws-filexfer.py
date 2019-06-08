@@ -23,11 +23,9 @@ from aiortcdc import RTCPeerConnection, RTCSessionDescription
 from signaling_share_ws import add_signaling_arguments, create_signaling
 
 sctp_transport_established = False
-should_exit = False
 
 async def consume_signaling(pc, signaling):
-    global should_exit
-    while should_exit == False:
+    while True:
         obj = await signaling.receive()
 
         if isinstance(obj, RTCSessionDescription):
@@ -111,22 +109,19 @@ async def run_offer(pc, signaling, fp):
 #     exit()
 
 def ice_establishment_state():
-    global should_exit
     while(sctp_transport_established == False and "failed" not in pc.iceConnectionState):
         print("ice_establishment_state: " + pc.iceConnectionState)
         time.sleep(1)
     #signaling.send("sctp_establish_fail")
     if sctp_transport_established == False:
         print("hole punching to remote machine failed.")
-        should_exit = True
-
-        # close_loop = asyncio.new_event_loop()
-        # close_loop.run_until_complete(signaling.close())
-        loop.stop()
-        loop.close()
+        try:
+            loop.stop()
+            loop.close()
+        except:
+            pass
         print("exit.")
-        # print("exit.")
-        # sys.exit()
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Data channel file transfer')
@@ -155,13 +150,16 @@ if __name__ == '__main__':
         fp = open(args.filename, 'wb')
         coro = run_answer(pc, signaling, fp)
 
-    # run event loop
-    loop = asyncio.get_event_loop()
     try:
-        loop.run_until_complete(coro)
-    except KeyboardInterrupt:
+        # run event loop
+        loop = asyncio.get_event_loop()
+        try:
+            loop.run_until_complete(coro)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            fp.close()
+            loop.run_until_complete(pc.close())
+            loop.run_until_complete(signaling.close())
+    except:
         pass
-    finally:
-        fp.close()
-        loop.run_until_complete(pc.close())
-        loop.run_until_complete(signaling.close())
