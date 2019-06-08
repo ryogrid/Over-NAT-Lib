@@ -129,6 +129,11 @@ def clean_disconnected_client_ws_objs_and_channels():
             next
     for s in remove_list:
         ws_list.remove(s)
+        for chennel_sig in channel_dict.keys():
+            channel_obj = channel_dict[channel_sig]
+            print("user remove len (BEFORE):" + str(len(channel_obj.users)))
+            channel_obj.users.remove(s)
+            print("user remove len (AFTER):" + str(len(channel_obj.users)))
 
     dict_keys = channel_dict.keys()
     for ch_key in dict_keys:
@@ -144,9 +149,5 @@ def signaling_app(environ, start_response):
 
 
 print("Server is running on localhost:10000...")
-try:
-    server = pywsgi.WSGIServer(('0.0.0.0', 10000), signaling_app, handler_class=WebSocketHandler)
-    server.serve_forever()
-except TypeError as e:
-    print("below is TypeError object")
-    print(e)
+server = pywsgi.WSGIServer(('0.0.0.0', 10000), signaling_app, handler_class=WebSocketHandler)
+server.serve_forever()
