@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import logging
 import time
+import threading
 
 # optional, for better performance
 try:
@@ -19,6 +20,8 @@ from os import path
 from aiortcdc import RTCPeerConnection, RTCSessionDescription
 #from aiortcdc.contrib.signaling_share_ws import add_signaling_arguments, create_signaling
 from signaling_share_ws import add_signaling_arguments, create_signaling
+
+sctp_transport_established = False
 
 async def consume_signaling(pc, signaling):
     while True:
@@ -45,8 +48,10 @@ async def run_answer(pc, signaling, filename):
 
     @pc.on('datachannel')
     def on_datachannel(channel):
+        global sctp_transport_established
         start = time.time()
         octets = 0
+        sctp_transport_established = True
 
         @channel.on('message')
         async def on_message(message):
@@ -78,6 +83,9 @@ async def run_offer(pc, signaling, fp):
 
     def send_data():
         nonlocal done_reading
+        global sctp_transport_established
+
+        sctp_transport_established = True
 
         while (channel.bufferedAmount <= channel.bufferedAmountLowThreshold) and not done_reading:
             data = fp.read(16384)
@@ -94,6 +102,10 @@ async def run_offer(pc, signaling, fp):
 
     await consume_signaling(pc, signaling)
 
+def ice_establishment_state():
+    while(sctp_transport_established == False):
+        print("ice_establishment_state: " + pc.iceConnectionState)
+        time.sleep(1)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Data channel file transfer')
@@ -117,6 +129,9 @@ if __name__ == '__main__':
     else:
         fp = open(args.filename, 'wb')
         coro = run_answer(pc, signaling, fp)
+
+    ice_state_th = threading.Thread(target=ice_establishment_state)
+    ice_state_th.start()
 
     # run event loop
     loop = asyncio.get_event_loop()
