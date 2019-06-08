@@ -69,7 +69,7 @@ def accept_and_later_msg_handle(environ, start_response):
             break
 
         print("recieved msg: " + msg)
-        
+
         splited_msg = msg.split(":")
         channel_signiture = splited_msg[0]
         if channel_signiture.endswith("_chsig") == False:
@@ -144,5 +144,9 @@ def signaling_app(environ, start_response):
 
 
 print("Server is running on localhost:10000...")
-server = pywsgi.WSGIServer(('0.0.0.0', 10000), signaling_app, handler_class=WebSocketHandler)
-server.serve_forever()
+try:
+    server = pywsgi.WSGIServer(('0.0.0.0', 10000), signaling_app, handler_class=WebSocketHandler)
+    server.serve_forever()
+except TypeError as e:
+    print("below is TypeError object")
+    print(e)
