@@ -5,6 +5,7 @@ import asyncio
 import logging
 import time
 import threading
+import sys
 
 # optional, for better performance
 try:
@@ -35,7 +36,12 @@ async def consume_signaling(pc, signaling):
                 await pc.setLocalDescription(await pc.createAnswer())
                 await signaling.send(pc.localDescription)
         elif isinstance(obj, str):
-            print("string recievd: " + obj)
+            if "sctp_establish_fail" in obj:
+                print("hole punching from remote machint to this machine was failed.")
+                print("exit.")
+                sys.exit()
+            else:
+                print("string recievd: " + obj)
         else:
 #            print(type(obj))
 #            print(str(obj))
@@ -102,10 +108,19 @@ async def run_offer(pc, signaling, fp):
 
     await consume_signaling(pc, signaling)
 
+# async def exit_due_to_punching_fail():
+#     print("hole punching to remote machine failed.")
+#     print("exit.")
+#     exit()
+
 def ice_establishment_state():
-    while(sctp_transport_established == False):
+    while(sctp_transport_established == False and "failed" not in pc.iceConnectionState):
         print("ice_establishment_state: " + pc.iceConnectionState)
         time.sleep(1)
+    signaling.send("sctp_establish_fail")
+    print("hole punching to remote machine failed.")
+    print("exit.")
+    sys.exit()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Data channel file transfer')
@@ -123,15 +138,17 @@ if __name__ == '__main__':
         asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     signaling = create_signaling(args)
     pc = RTCPeerConnection()
+
     if args.role == 'send':
         fp = open(args.filename, 'rb')
+
+        ice_state_th = threading.Thread(target=ice_establishment_state)
+        ice_state_th.start()
+
         coro = run_offer(pc, signaling, fp)
     else:
         fp = open(args.filename, 'wb')
         coro = run_answer(pc, signaling, fp)
-
-    ice_state_th = threading.Thread(target=ice_establishment_state)
-    ice_state_th.start()
 
     # run event loop
     loop = asyncio.get_event_loop()
