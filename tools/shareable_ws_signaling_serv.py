@@ -129,7 +129,7 @@ def clean_disconnected_client_ws_objs_and_channels():
             next
     for s in remove_list:
         ws_list.remove(s)
-        for chennel_sig in channel_dict.keys():
+        for channel_sig in channel_dict.keys():
             channel_obj = channel_dict[channel_sig]
             print("user remove len (BEFORE):" + str(len(channel_obj.users)))
             channel_obj.users.remove(s)
