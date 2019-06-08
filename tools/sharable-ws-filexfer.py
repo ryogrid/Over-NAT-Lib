@@ -118,8 +118,8 @@ def ice_establishment_state():
     #signaling.send("sctp_establish_fail")
     print("hole punching to remote machine failed.")
     should_exit = True
-    signaling.close()
-    print("exit.")    
+    loop.run_until_complete(signaling.close())
+    print("exit.")
     # print("exit.")
     # sys.exit()
 
