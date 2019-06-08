@@ -23,9 +23,11 @@ from aiortcdc import RTCPeerConnection, RTCSessionDescription
 from signaling_share_ws import add_signaling_arguments, create_signaling
 
 sctp_transport_established = False
+should_exit = False
 
 async def consume_signaling(pc, signaling):
-    while True:
+    global should_exit
+    while should_exit == False:
         obj = await signaling.receive()
 
         if isinstance(obj, RTCSessionDescription):
@@ -36,12 +38,7 @@ async def consume_signaling(pc, signaling):
                 await pc.setLocalDescription(await pc.createAnswer())
                 await signaling.send(pc.localDescription)
         elif isinstance(obj, str):
-            if "sctp_establish_fail" in obj:
-                print("hole punching from remote machint to this machine was failed.")
-                print("exit.")
-                sys.exit()
-            else:
-                print("string recievd: " + obj)
+            print("string recievd: " + obj)
         else:
 #            print(type(obj))
 #            print(str(obj))
@@ -114,11 +111,15 @@ async def run_offer(pc, signaling, fp):
 #     exit()
 
 def ice_establishment_state():
+    global should_exit
     while(sctp_transport_established == False and "failed" not in pc.iceConnectionState):
         print("ice_establishment_state: " + pc.iceConnectionState)
         time.sleep(1)
-    signaling.send("sctp_establish_fail")
+    #signaling.send("sctp_establish_fail")
     print("hole punching to remote machine failed.")
+    should_exit = True
+    signaling.close()
+    print("exit.")    
     # print("exit.")
     # sys.exit()
 
@@ -139,12 +140,11 @@ if __name__ == '__main__':
     signaling = create_signaling(args)
     pc = RTCPeerConnection()
 
+    ice_state_th = threading.Thread(target=ice_establishment_state)
+    ice_state_th.start()
+
     if args.role == 'send':
         fp = open(args.filename, 'rb')
-
-        ice_state_th = threading.Thread(target=ice_establishment_state)
-        ice_state_th.start()
-
         coro = run_offer(pc, signaling, fp)
     else:
         fp = open(args.filename, 'wb')
