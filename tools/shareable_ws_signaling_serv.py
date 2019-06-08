@@ -3,6 +3,7 @@ import os
 from geventwebsocket.handler import WebSocketHandler
 from gevent import pywsgi, sleep
 import traceback
+import copy
 
 ws_list = []
 channel_dict = {}
@@ -135,7 +136,7 @@ def clean_disconnected_client_ws_objs_and_channels():
             channel_obj.users.remove(s)
             print("user remove len (AFTER):" + str(len(channel_obj.users)))
 
-    dict_keys = channel_dict.keys()
+    dict_keys = copy.copy(list(channel_dict.keys()))
     for ch_key in dict_keys:
         channel_dict[ch_key].dispose_if_empty()
 
