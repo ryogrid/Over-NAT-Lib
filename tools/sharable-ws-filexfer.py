@@ -120,7 +120,7 @@ def ice_establishment_state():
         print("hole punching to remote machine failed.")
         should_exit = True
 
-        close_loop = asyncio.get_event_loop()
+        close_loop = asyncio.new_event_loop()
         close_loop.run_until_complete(signaling.close())
         print("exit.")
         # print("exit.")
