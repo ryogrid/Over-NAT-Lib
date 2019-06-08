@@ -116,12 +116,13 @@ def ice_establishment_state():
         print("ice_establishment_state: " + pc.iceConnectionState)
         time.sleep(1)
     #signaling.send("sctp_establish_fail")
-    print("hole punching to remote machine failed.")
-    should_exit = True
-    loop.run_until_complete(signaling.close())
-    print("exit.")
-    # print("exit.")
-    # sys.exit()
+    if sctp_transport_established == False:
+        print("hole punching to remote machine failed.")
+        should_exit = True
+        loop.run_until_complete(signaling.close())
+        print("exit.")
+        # print("exit.")
+        # sys.exit()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Data channel file transfer')
