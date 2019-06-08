@@ -119,7 +119,9 @@ def ice_establishment_state():
     if sctp_transport_established == False:
         print("hole punching to remote machine failed.")
         should_exit = True
-        loop.run_until_complete(signaling.close())
+
+        close_loop = asyncio.get_event_loop()
+        close_loop.run_until_complete(signaling.close())
         print("exit.")
         # print("exit.")
         # sys.exit()
