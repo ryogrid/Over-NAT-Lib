@@ -67,6 +67,7 @@ def communicate_start(channel):
 
     def file_reader():
         global read_fp
+        print("called file_reader")
         data = read_fp.read(16384)
         if data:
             channel.send(data)
