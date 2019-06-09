@@ -94,8 +94,9 @@ async def run_answer(pc, signaling):
     @pc.on('datachannel')
     def on_datachannel(channel):
         #channel_log(channel, '-', 'created by remote party')
-        if channel.label == 'filexfer':
-            communicate_start(channel)
+        pass
+        #if channel.label == 'filexfer':
+            #communicate_start(channel)
 
     await consume_signaling(pc, signaling)
 
