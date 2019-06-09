@@ -27,6 +27,7 @@ channel = None
 done_reading = False
 sctp_sender_to_receiver_established = False
 sctp_receiver_to_sender_established = False
+fp = None
 
 async def consume_signaling(pc, signaling):
     global force_exited
@@ -112,28 +113,28 @@ async def run_offer(pc, signaling, fp):
     done_reading = False
     channel = pc.createDataChannel('filexfer')
 
-    @pc.on('datachannel')
-    def on_datachannel(channel):
-        start = time.time()
-        octets = 0
-
-        @channel.on('message')
-        async def on_message(message):
-            nonlocal octets
-
-            fp_pong = open(args.filename + ".pong", 'wb')
-            if message:
-                octets += len(message)
-                fp_pong.write(message)
-            else:
-                elapsed = time.time() - start
-                if elapsed == 0:
-                    elapsed = 0.001
-                print('received %d bytes in %.1f s (%.3f Mbps)' % (
-                    octets, elapsed, octets * 8 / elapsed / 1000000))
-
-                # say goodbye
-                await signaling.send(None)
+    # @pc.on('datachannel')
+    # def on_datachannel(channel):
+    #     start = time.time()
+    #     octets = 0
+    #
+    #     @channel.on('message')
+    #     async def on_message(message):
+    #         nonlocal octets
+    #
+    #         fp_pong = open(args.filename + ".pong", 'wb')
+    #         if message:
+    #             octets += len(message)
+    #             fp_pong.write(message)
+    #         else:
+    #             elapsed = time.time() - start
+    #             if elapsed == 0:
+    #                 elapsed = 0.001
+    #             print('received %d bytes in %.1f s (%.3f Mbps)' % (
+    #                 octets, elapsed, octets * 8 / elapsed / 1000000))
+    #
+    #             # say goodbye
+    #             await signaling.send(None)
 
     channel.on('bufferedamountlow', send_data)
     channel.on('open', send_data)
@@ -162,33 +163,33 @@ def force_exit():
         pass
     print("exit.")
 
-def establish_pc_from_receiver():
-    global channel
-
-    channel = pc.createDataChannel('filexferrecv')
-    channel.on('bufferedamountlow', send_data)
-    channel.on('open', send_data)
-
-def ice_establishment_state():
-    global args
-    global pc
-
-    while(sctp_sender_to_receiver_established == False and "failed" not in pc.iceConnectionState):
-        print("ice_establishment_state: " + pc.iceConnectionState)
-        time.sleep(1)
-    #signaling.send("sctp_establish_fail")
-    if sctp_sender_to_receiver_established == False:
-        force_exit()
-    else:
-        pass
-        if args.role == 'receive':
-            establish_pc_from_receiver()
-
-    while(sctp_receiver_to_sender_established == False and "failed" not in pc.iceConnectionState):
-        print("ice_establishment_state: " + pc.iceConnectionState)
-        time.sleep(1)
-    if sctp_receiver_to_sender_established == False:
-        force_exit()
+# def establish_pc_from_receiver():
+#     global channel
+#
+#     channel = pc.createDataChannel('filexferrecv')
+#     channel.on('bufferedamountlow', send_data)
+#     channel.on('open', send_data)
+#
+# def ice_establishment_state():
+#     global args
+#     global pc
+#
+#     while(sctp_sender_to_receiver_established == False and "failed" not in pc.iceConnectionState):
+#         print("ice_establishment_state: " + pc.iceConnectionState)
+#         time.sleep(1)
+#     #signaling.send("sctp_establish_fail")
+#     if sctp_sender_to_receiver_established == False:
+#         force_exit()
+#     else:
+#         pass
+#         if args.role == 'receive':
+#             establish_pc_from_receiver()
+#
+#     while(sctp_receiver_to_sender_established == False and "failed" not in pc.iceConnectionState):
+#         print("ice_establishment_state: " + pc.iceConnectionState)
+#         time.sleep(1)
+#     if sctp_receiver_to_sender_established == False:
+#         force_exit()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Data channel file transfer')
@@ -207,8 +208,8 @@ if __name__ == '__main__':
     signaling = create_signaling(args)
     pc = RTCPeerConnection()
 
-    ice_state_th = threading.Thread(target=ice_establishment_state)
-    ice_state_th.start()
+    # ice_state_th = threading.Thread(target=ice_establishment_state)
+    # ice_state_th.start()
 
     if args.role == 'send':
         fp = open(args.filename, 'rb')
