@@ -26,6 +26,7 @@ force_exited = False
 ocrtets = 0
 read_fp = None
 write_fp = None
+loop = None
 
 async def consume_signaling(pc, signaling):
     global force_exited
@@ -61,12 +62,14 @@ def wrrite_file(message):
 
 def communicate_start(channel):
     global write_fp
+    global read_fp
     # relay channel -> tap
     print("communicate start")
     channel.on('message')(write_fp.write)
 
-    def file_reader():
+    def file_reader(*args):
         global read_fp
+        nonlocal channel
         print("called file_reader")
         data = read_fp.read(16384)
         if data:
@@ -74,8 +77,15 @@ def communicate_start(channel):
         else:
             print("all data readed.")
 
-    loop = asyncio.get_event_loop()
-    loop.add_reader(write_fp, file_reader)
+    # trans_loop = None
+    # #loop = asyncio.get_event_loop()
+    # if sys.platform == 'win32':
+    #     trans_loop = asyncio.ProactorEventLoop()
+    # else:
+    #     trans_loop = asyncio.new_event_loop()
+    trans_loog = asysncio.get_event_loop()
+    trans_loop.add_reader(read_fp, file_reader)
+    #trans_loop.run_forever()
 
 async def run_answer(pc, signaling):
     await signaling.connect()
@@ -175,7 +185,7 @@ def ice_establishment_state():
     global force_exited
     while "failed" not in pc.iceConnectionState :
         print("ice_establishment_state: " + pc.iceConnectionState)
-        time.sleep(1)
+        time.sleep(3)
     #signaling.send("sctp_establish_fail")
     if "failed" in pc.iceConnectionState:
         print("hole punching to remote machine failed.")
@@ -218,8 +228,13 @@ if __name__ == '__main__':
         coro = run_answer(pc, signaling)
 
     try:
-        # run event loop
         loop = asyncio.get_event_loop()
+        # if sys.platform == 'win32':
+        #     loop = asyncio.ProactorEventLoop()
+        # else:
+        #     # run event loop
+        #     loop = asyncio.get_event_loop()
+
         try:
             loop.run_until_complete(coro)
         except KeyboardInterrupt:
