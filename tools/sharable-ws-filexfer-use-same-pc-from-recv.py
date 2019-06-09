@@ -26,7 +26,7 @@ sctp_transport_established = False
 force_exited = False
 channel = None
 done_reading = False
-recv_transfer_started = False
+ping_recv_finished = False
 
 async def consume_signaling(pc, signaling):
     global force_exited
@@ -49,20 +49,17 @@ async def consume_signaling(pc, signaling):
 def send_data():
     global done_reading
     global fp
-    global recv_transfer_started
-    global channel
+    global ping_recv_finished
 
     fp_send = fp
-    if args.role == 'receive' and recv_transfer_started == False: # first, when not as handller called
+    if args.role == 'receive' and ping_recv_finished == False: # first, when not as handller called
         # re-open received file with read previledge
         fp.close()
         fp_send = open(args.filename, 'rb')
         fp = fp_send
         channel.on('bufferedamountlow', send_data)
-        recv_transfer_started = True
+        ping_recv_finished = True
 
-    print(str(channel.bufferedAmount))
-    print(str(channel.bufferedAmountLowThreshold))
     while (channel.bufferedAmount <= channel.bufferedAmountLowThreshold) and not done_reading:
         data = fp_send.read(16384)
         channel.send(data)
@@ -77,23 +74,19 @@ async def run_answer(pc, signaling, filename):
     await signaling.send("join")
 
     done_reading = False
-    #hannel = pc.createDataChannel('filexfer2')
+    channel = pc.createDataChannel('filexfer2')
 
     @pc.on('datachannel')
-    def on_datachannel(channel_arg):
+    def on_datachannel(channel):
         global sctp_transport_established
-        global channel
-        channel = channel_arg
         start = time.time()
         octets = 0
         sctp_transport_established = True
-        print("established sctp transport to me")
-        print("start pong transfer.")
-        send_data()
 
         @channel.on('message')
         async def on_message(message):
             nonlocal octets
+            global ping_recv_finished
 
             if message:
                 octets += len(message)
@@ -104,6 +97,10 @@ async def run_answer(pc, signaling, filename):
                     elapsed = 0.001
                 print('received %d bytes in %.1f s (%.3f Mbps)' % (
                     octets, elapsed, octets * 8 / elapsed / 1000000))
+
+                print("start pong transfer.")
+                #channel.on('open', send_data)
+                send_data()
                 # say goodbye
                 # await signaling.send(None)
 
@@ -144,9 +141,8 @@ async def run_offer(pc, signaling, fp):
                 # say goodbye
                 await signaling.send(None)
 
-    #channel.on('bufferedamountlow', send_data)
-    #channel.on('open', send_data)
-    channel.on('open', lambda: print("established sctp transport from me"))
+    channel.on('bufferedamountlow', send_data)
+    channel.on('open', send_data)
 
     # send offer
     await pc.setLocalDescription(await pc.createOffer())
@@ -154,11 +150,18 @@ async def run_offer(pc, signaling, fp):
 
     await consume_signaling(pc, signaling)
 
+# async def exit_due_to_punching_fail():
+#     print("hole punching to remote machine failed.")
+#     print("exit.")
+#     exit()
+
 def ice_establishment_state():
     global force_exited
 
     while(sctp_transport_established == False and "failed" not in pc.iceConnectionState):
+        #print("ice_establishment_state: " + pc.iceConnectionState)
         time.sleep(1)
+    #signaling.send("sctp_establish_fail")
     if sctp_transport_established == False:
         print("hole punching to remote machine failed.")
         force_exited = True
