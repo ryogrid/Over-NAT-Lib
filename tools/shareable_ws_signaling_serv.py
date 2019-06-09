@@ -139,7 +139,7 @@ def clean_disconnected_client_ws_objs_and_channels():
     dict_keys = copy.copy(list(channel_dict.keys()))
     for ch_key in dict_keys:
         channel_dict[ch_key].dispose_if_empty()
-    printf("finished clean_disconnected_client_ws_objs_and_channels")
+    print("finished clean_disconnected_client_ws_objs_and_channels")
 
 def signaling_app(environ, start_response):
     clean_disconnected_client_ws_objs_and_channels()
