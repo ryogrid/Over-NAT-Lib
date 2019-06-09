@@ -23,12 +23,6 @@ from aiortcdc import RTCPeerConnection, RTCSessionDescription
 from signaling_share_ws import add_signaling_arguments, create_signaling
 
 force_exited = False
-channel_send = None
-channel_recv = None
-channel_cur = None
-done_reading = False
-sctp_sender_to_receiver_established = False
-sctp_receiver_to_sender_established = False
 fp = None
 
 async def consume_signaling(pc, signaling):
@@ -49,52 +43,44 @@ async def consume_signaling(pc, signaling):
             print('Exiting')
             break
 
-def send_data():
-    global done_reading
-    global fp
-    global sctp_sender_to_receiver_established
-    global sctp_receiver_to_sender_established
-    global channel_cur
-
-    fp_send = fp
-
-    if args.role == 'receive' and sctp_receiver_to_sender_established == False: # first called
-        # re-open received file with read previledge
-        fp.close()
-        fp_send = open(args.filename, 'rb')
-        fp = fp_send
-        sctp_receiver_to_sender_established = True
-        channel_cur = channel_recv
-        print("start transfer.")
-    elif args.role == 'send' and sctp_sender_to_receiver_established == False: # first called
-        sctp_sender_to_receiver_established = True
-        channel_cur = channnel_send
-        print("start transfer.")
-
-    while (channel.bufferedAmount <= channel.bufferedAmountLowThreshold) and not done_reading:
-        print(str(channel.bufferedAmount))
-        print(str(channel.bufferedAmountLowThreshold))
-        data = fp_send.read(16384)
-        channel_cur.send(data)
-        if not data:
-            done_reading = True
-
 async def run_answer(pc, signaling, filename):
-    global done_reading
-    global channel_recv
     await signaling.connect()
     await signaling.send("join")
 
     done_reading = False
-    channel_recv = pc.createDataChannel('filexfer2')
-    channel_recv.on('bufferedamountlow', send_data)
-    channel_recv.on('open', send_data)
+    channel = pc.createDataChannel('filexfer2')
+    is_first = True
+    fp_read = None
+
+    def send_data():
+        nonlocal done_reading
+        nonlocal is_first
+        nonlocal fp_read
+
+        if is_first:
+            # re-open received file with read previledge
+            fp.close()
+            fp_read = open(args.filename, 'rb')
+            print("start transfer.")
+        elif is_fist: # first called
+            is_first = True
+            fp_read = fp
+            print("start transfer.")
+
+        while (channel.bufferedAmount <= channel.bufferedAmountLowThreshold) and not done_reading:
+            data = fp_read.read(16384)
+            channel.send(data)
+            if not data:
+                done_reading = True
 
     @pc.on('datachannel')
     def on_datachannel(channel):
+        global channel_recv
         start = time.time()
         octets = 0
         printf("established transport to me. then start establish from me.")
+        # channel_recv.on('bufferedamountlow', send_data)
+        # channel_recv.on('open', send_data)
 
         @channel.on('message')
         async def on_message(message):
@@ -154,11 +140,6 @@ async def run_offer(pc, signaling, fp):
 
     await consume_signaling(pc, signaling)
 
-# async def exit_due_to_punching_fail():
-#     print("hole punching to remote machine failed.")
-#     print("exit.")
-#     exit()
-
 def force_exit():
     global force_exited
     global loop
@@ -183,21 +164,25 @@ def ice_establishment_state():
     global args
     global pc
 
-    while(sctp_sender_to_receiver_established == False and "failed" not in pc.iceConnectionState):
+    while "completed" not in pc.iceConnectionState and "failed" not in pc.iceConnectionState:
         print("ice_establishment_state: " + pc.iceConnectionState)
         time.sleep(1)
     #signaling.send("sctp_establish_fail")
-    if sctp_sender_to_receiver_established == False:
+    if "failed" in pc.iceConnectionState:
         force_exit()
     else:
         pass
         if args.role == 'receive':
             establish_pc_from_receiver()
 
-    while(sctp_receiver_to_sender_established == False and "failed" not in pc.iceConnectionState):
+    while "new" not in pc.iceConnectionState:
         print("ice_establishment_state: " + pc.iceConnectionState)
         time.sleep(1)
-    if sctp_receiver_to_sender_established == False:
+    
+    while "completed" not in pc.iceConnectionState and "failed" not in pc.iceConnectionState:
+        print("ice_establishment_state: " + pc.iceConnectionState)
+        time.sleep(1)
+    if "failed" in pc.iceConnectionState:
         force_exit()
 
 if __name__ == '__main__':
@@ -217,8 +202,8 @@ if __name__ == '__main__':
     signaling = create_signaling(args)
     pc = RTCPeerConnection()
 
-    # ice_state_th = threading.Thread(target=ice_establishment_state)
-    # ice_state_th.start()
+    ice_state_th = threading.Thread(target=ice_establishment_state)
+    ice_state_th.start()
 
     if args.role == 'send':
         fp = open(args.filename, 'rb')
