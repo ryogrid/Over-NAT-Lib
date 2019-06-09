@@ -22,8 +22,10 @@ from aiortcdc import RTCPeerConnection, RTCSessionDescription
 #from aiortcdc.contrib.signaling_share_ws import add_signaling_arguments, create_signaling
 from signaling_share_ws import add_signaling_arguments, create_signaling
 
-sctp_transport_established = False
 force_exited = False
+ocrtets = 0
+read_fp = None
+write_fp = None
 
 async def consume_signaling(pc, signaling):
     global force_exited
@@ -38,70 +40,130 @@ async def consume_signaling(pc, signaling):
                 await pc.setLocalDescription(await pc.createAnswer())
                 await signaling.send(pc.localDescription)
         elif isinstance(obj, str) and force_exited == False:
-            print("string recievd: " + obj)
+            pass
+            #print("string recievd: " + obj)
         else:
             print('Exiting')
             break
 
+def wrrite_file(message):
+    global octets
 
-async def run_answer(pc, signaling, filename):
+    if message:
+        octets += len(message)
+        fp.write(message)
+    else:
+        elapsed = time.time() - start
+        if elapsed == 0:
+            elapsed = 0.001
+        print('received %d bytes in %.1f s (%.3f Mbps)' % (
+            octets, elapsed, octets * 8 / elapsed / 1000000))
+
+def communicate_start(channel):
+    global write_fp
+    # relay channel -> tap
+    channel.on('message')(write_fp.write)
+
+    def file_reader():
+        global read_fp
+        data = read_fp.read(16384)
+        if data:
+            channel.send(data)
+        else:
+            print("all data readed.")
+
+    loop = asyncio.get_event_loop()
+    loop.add_reader(write_fp, file_reader)
+
+async def run_answer(pc, signaling):
     await signaling.connect()
+    await signaling.send("join")
 
     @pc.on('datachannel')
     def on_datachannel(channel):
-        global sctp_transport_established
-        start = time.time()
-        octets = 0
-        sctp_transport_established = True
+        #channel_log(channel, '-', 'created by remote party')
+        if channel.label == 'filexfer':
+            tun_start(tap, channel)
 
-        @channel.on('message')
-        async def on_message(message):
-            nonlocal octets
-
-            if message:
-                octets += len(message)
-                fp.write(message)
-            else:
-                elapsed = time.time() - start
-                if elapsed == 0:
-                    elapsed = 0.001
-                print('received %d bytes in %.1f s (%.3f Mbps)' % (
-                    octets, elapsed, octets * 8 / elapsed / 1000000))
-
-                # say goodbye
-                await signaling.send(None)
-
-    await signaling.send("join")
     await consume_signaling(pc, signaling)
 
 
-async def run_offer(pc, signaling, fp):
+async def run_offer(pc, signaling):
     await signaling.connect()
     await signaling.send("join")
 
-    done_reading = False
     channel = pc.createDataChannel('filexfer')
+    #channel_log(channel, '-', 'created by local party')
 
-    def send_data():
-        nonlocal done_reading
-        global sctp_transport_established
+    @channel.on('open')
+    def on_open():
 
-        sctp_transport_established = True
-
-        while (channel.bufferedAmount <= channel.bufferedAmountLowThreshold) and not done_reading:
-            data = fp.read(16384)
-            channel.send(data)
-            if not data:
-                done_reading = True
-
-    channel.on('bufferedamountlow', send_data)
-    channel.on('open', send_data)
+        tun_start(tap, channel)
 
     # send offer
     await pc.setLocalDescription(await pc.createOffer())
     await signaling.send(pc.localDescription)
 
     await consume_signaling(pc, signaling)
+
+# async def run_answer(pc, signaling, filename):
+#     await signaling.connect()
+#
+#     @pc.on('datachannel')
+#     def on_datachannel(channel):
+#         global sctp_transport_established
+#         start = time.time()
+#         octets = 0
+#         sctp_transport_established = True
+#
+#         @channel.on('message')
+#         async def on_message(message):
+#             nonlocal octets
+#
+#             if message:
+#                 octets += len(message)
+#                 fp.write(message)
+#             else:
+#                 elapsed = time.time() - start
+#                 if elapsed == 0:
+#                     elapsed = 0.001
+#                 print('received %d bytes in %.1f s (%.3f Mbps)' % (
+#                     octets, elapsed, octets * 8 / elapsed / 1000000))
+#
+#                 # say goodbye
+#                 await signaling.send(None)
+#
+#     await signaling.send("join")
+#     await consume_signaling(pc, signaling)
+#
+#
+# async def run_offer(pc, signaling, fp):
+#     await signaling.connect()
+#     await signaling.send("join")
+#
+#     done_reading = False
+#     channel = pc.createDataChannel('filexfer')
+#
+#     def send_data():
+#         nonlocal done_reading
+#         global sctp_transport_established
+#
+#         sctp_transport_established = True
+#
+#         while (channel.bufferedAmount <= channel.bufferedAmountLowThreshold) and not done_reading:
+#             data = fp.read(16384)
+#             channel.send(data)
+#             if not data:
+#                 done_reading = True
+#
+#     channel.on('bufferedamountlow', send_data)
+#     channel.on('open', send_data)
+#
+#     # send offer
+#     await pc.setLocalDescription(await pc.createOffer())
+#     await signaling.send(pc.localDescription)
+#
+#     await consume_signaling(pc, signaling)
 
 # async def exit_due_to_punching_fail():
 #     print("hole punching to remote machine failed.")
@@ -110,11 +172,11 @@ async def run_offer(pc, signaling, fp):
 
 def ice_establishment_state():
     global force_exited
-    while(sctp_transport_established == False and "failed" not in pc.iceConnectionState):
-        #print("ice_establishment_state: " + pc.iceConnectionState)
+    while "failed" not in pc.iceConnectionState :
+        print("ice_establishment_state: " + pc.iceConnectionState)
         time.sleep(1)
     #signaling.send("sctp_establish_fail")
-    if sctp_transport_established == False:
+    if "failed" in pc.iceConnectionState:
         print("hole punching to remote machine failed.")
         force_exited = True
         try:
@@ -146,11 +208,13 @@ if __name__ == '__main__':
     ice_state_th.start()
 
     if args.role == 'send':
-        fp = open(args.filename, 'rb')
-        coro = run_offer(pc, signaling, fp)
+        read_fp = open(args.filename, 'rb')
+        write_fp = open(args.filename + ".rsv", 'wb')
+        coro = run_offer(pc, signaling)
     else:
-        fp = open(args.filename, 'wb')
-        coro = run_answer(pc, signaling, fp)
+        read_fp = open(args.filename, 'rb')
+        write_fp = open(args.filename + ".rsv", 'wb')
+        coro = run_answer(pc, signaling)
 
     try:
         # run event loop
