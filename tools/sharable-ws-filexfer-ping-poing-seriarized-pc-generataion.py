@@ -22,11 +22,11 @@ from aiortcdc import RTCPeerConnection, RTCSessionDescription
 #from aiortcdc.contrib.signaling_share_ws import add_signaling_arguments, create_signaling
 from signaling_share_ws import add_signaling_arguments, create_signaling
 
-sctp_transport_established = False
 force_exited = False
 channel = None
 done_reading = False
-ping_recv_finished = False
+sctp_sender_to_receiver_established = False
+sctp_receiver_to_sender_established = False
 
 async def consume_signaling(pc, signaling):
     global force_exited
@@ -49,44 +49,46 @@ async def consume_signaling(pc, signaling):
 def send_data():
     global done_reading
     global fp
-    global ping_recv_finished
+    global sctp_sender_to_receiver_established
+    global sctp_receiver_to_sender_established
 
     fp_send = fp
-    if args.role == 'receive' and ping_recv_finished == False: # first, when not as handller called
+    if args.role == 'receive' and sctp_receiver_to_sender_established == False: # first called
         # re-open received file with read previledge
         fp.close()
         fp_send = open(args.filename, 'rb')
         fp = fp_send
-        channel.on('bufferedamountlow', send_data)
-        ping_recv_finished = True
+        sctp_receiver_to_sender_established = True
+        print("start transfer.")
+    elif args.role == 'send' and sctp_sender_to_receiver_established == False: # first called
+        sctp_sender_to_receiver_established = True
+        print("start transfer.")
 
     while (channel.bufferedAmount <= channel.bufferedAmountLowThreshold) and not done_reading:
+        print(str(channel.bufferedAmount))
+        print(str(channel.bufferedAmountLowThreshold))
         data = fp_send.read(16384)
         channel.send(data)
         if not data:
             done_reading = True
 
 async def run_answer(pc, signaling, filename):
-    global channel
     global done_reading
 
     await signaling.connect()
     await signaling.send("join")
 
     done_reading = False
-    channel = pc.createDataChannel('filexfer2')
 
     @pc.on('datachannel')
     def on_datachannel(channel):
-        global sctp_transport_established
         start = time.time()
         octets = 0
-        sctp_transport_established = True
+        printf("established transport to me. then start establish from me.")
 
         @channel.on('message')
         async def on_message(message):
             nonlocal octets
-            global ping_recv_finished
 
             if message:
                 octets += len(message)
@@ -98,12 +100,6 @@ async def run_answer(pc, signaling, filename):
                 print('received %d bytes in %.1f s (%.3f Mbps)' % (
                     octets, elapsed, octets * 8 / elapsed / 1000000))
 
-                print("start pong transfer.")
-                #channel.on('open', send_data)
-                send_data()
-                # say goodbye
-                # await signaling.send(None)
-
     await consume_signaling(pc, signaling)
 
 
@@ -114,14 +110,12 @@ async def run_offer(pc, signaling, fp):
     await signaling.send("join")
 
     done_reading = False
-    channel = pc.createDataChannel('filexfer1')
+    channel = pc.createDataChannel('filexfer')
 
     @pc.on('datachannel')
     def on_datachannel(channel):
-        global sctp_transport_established
         start = time.time()
         octets = 0
-        sctp_transport_established = True
 
         @channel.on('message')
         async def on_message(message):
@@ -155,23 +149,46 @@ async def run_offer(pc, signaling, fp):
 #     print("exit.")
 #     exit()
 
-def ice_establishment_state():
+def force_exit():
     global force_exited
+    global loop
 
-    while(sctp_transport_established == False and "failed" not in pc.iceConnectionState):
-        #print("ice_establishment_state: " + pc.iceConnectionState)
+    print("hole punching to remote machine failed.")
+    force_exited = True
+    try:
+        loop.stop()
+        loop.close()
+    except:
+        pass
+    print("exit.")
+
+def establish_pc_from_receiver():
+    global channel
+
+    channel = pc.createDataChannel('filexferrecv')
+    channel.on('bufferedamountlow', send_data)
+    channel.on('open', send_data)
+
+def ice_establishment_state():
+    global args
+    global pc
+
+    while(sctp_sender_to_receiver_established == False and "failed" not in pc.iceConnectionState):
+        print("ice_establishment_state: " + pc.iceConnectionState)
         time.sleep(1)
     #signaling.send("sctp_establish_fail")
-    if sctp_transport_established == False:
-        print("hole punching to remote machine failed.")
-        force_exited = True
-        try:
-            loop.stop()
-            loop.close()
-        except:
-            pass
-        print("exit.")
+    if sctp_sender_to_receiver_established == False:
+        force_exit()
+    else:
+        pass
+        if args.role == 'receive':
+            establish_pc_from_receiver()
 
+    while(sctp_receiver_to_sender_established == False and "failed" not in pc.iceConnectionState):
+        print("ice_establishment_state: " + pc.iceConnectionState)
+        time.sleep(1)
+    if sctp_receiver_to_sender_established == False:
+        force_exit()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Data channel file transfer')
