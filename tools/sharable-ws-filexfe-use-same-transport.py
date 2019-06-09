@@ -62,6 +62,7 @@ def wrrite_file(message):
 def communicate_start(channel):
     global write_fp
     # relay channel -> tap
+    print("communicate start")
     channel.on('message')(write_fp.write)
 
     def file_reader():
@@ -83,7 +84,7 @@ async def run_answer(pc, signaling):
     def on_datachannel(channel):
         #channel_log(channel, '-', 'created by remote party')
         if channel.label == 'filexfer':
-            tun_start(tap, channel)
+            communicate_start(channel)
 
     await consume_signaling(pc, signaling)
 
@@ -97,8 +98,7 @@ async def run_offer(pc, signaling):
 
     @channel.on('open')
     def on_open():
-
-        tun_start(tap, channel)
+        communicate_start(channel)
 
     # send offer
     await pc.setLocalDescription(await pc.createOffer())
