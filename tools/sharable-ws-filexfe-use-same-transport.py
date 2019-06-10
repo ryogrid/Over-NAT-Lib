@@ -67,15 +67,24 @@ def communicate_start(channel):
     print("communicate start")
     channel.on('message')(write_fp.write)
 
-    def file_reader(*args):
-        global read_fp
-        nonlocal channel
-        print("called file_reader")
+    done_reading = False
+
+    while (channel.bufferedAmount <= channel.bufferedAmountLowThreshold) and not done_reading:
         data = read_fp.read(16384)
-        if data:
-            channel.send(data)
-        else:
-            print("all data readed.")
+        channel.send(data)
+        print("sfter send")
+        if not data:
+            done_reading = True
+
+    # def file_reader(*args):
+    #     global read_fp
+    #     nonlocal channel
+    #     print("called file_reader")
+    #     data = read_fp.read(16384)
+    #     if data:
+    #         channel.send(data)
+    #     else:
+    #         print("all data readed.")
 
     # trans_loop = None
     # #loop = asyncio.get_event_loop()
@@ -83,8 +92,10 @@ def communicate_start(channel):
     #     trans_loop = asyncio.ProactorEventLoop()
     # else:
     #     trans_loop = asyncio.new_event_loop()
-    trans_loog = asysncio.get_event_loop()
-    trans_loop.add_reader(read_fp, file_reader)
+
+    #trans_loog = asysncio.get_event_loop()
+    #trans_loop.add_reader(read_fp, file_reader)
+
     #trans_loop.run_forever()
 
 async def run_answer(pc, signaling):
@@ -93,8 +104,33 @@ async def run_answer(pc, signaling):
 
     @pc.on('datachannel')
     def on_datachannel(channel):
+        global sctp_transport_established
+        start = time.time()
+        octets = 0
+        sctp_transport_established = True
+
+        @channel.on('message')
+        async def on_message(message):
+            nonlocal octets
+            global write_fp
+
+            if message:
+                octets += len(message)
+                write_fp.write(message)
+            else:
+                elapsed = time.time() - start
+                if elapsed == 0:
+                    elapsed = 0.001
+                print('received %d bytes in %.1f s (%.3f Mbps)' % (
+                    octets, elapsed, octets * 8 / elapsed / 1000000))
+
+                # say goodbye
+                await signaling.send(None)
+
+    # @pc.on('datachannel')
+    # def on_datachannel(channel):
         #channel_log(channel, '-', 'created by remote party')
-        pass
+        #pass
         #if channel.label == 'filexfer':
             #communicate_start(channel)
 
