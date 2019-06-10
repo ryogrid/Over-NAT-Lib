@@ -23,9 +23,9 @@ from aiortcdc import RTCPeerConnection, RTCSessionDescription
 from signaling_share_ws import add_signaling_arguments, create_signaling
 
 force_exited = False
-ocrtets = 0
-read_fp = None
-write_fp = None
+#ocrtets = 0
+#read_fp = None
+#write_fp = None
 loop = None
 
 async def consume_signaling(pc, signaling):
@@ -47,34 +47,34 @@ async def consume_signaling(pc, signaling):
             print('Exiting')
             break
 
-def wrrite_file(message):
-    global octets
+# def wrrite_file(message):
+#     global octets
+#
+#     if message:
+#         octets += len(message)
+#         fp.write(message)
+#     else:
+#         elapsed = time.time() - start
+#         if elapsed == 0:
+#             elapsed = 0.001
+#         print('received %d bytes in %.1f s (%.3f Mbps)' % (
+#             octets, elapsed, octets * 8 / elapsed / 1000000))
 
-    if message:
-        octets += len(message)
-        fp.write(message)
-    else:
-        elapsed = time.time() - start
-        if elapsed == 0:
-            elapsed = 0.001
-        print('received %d bytes in %.1f s (%.3f Mbps)' % (
-            octets, elapsed, octets * 8 / elapsed / 1000000))
-
-def communicate_start(channel):
-    global write_fp
-    global read_fp
-    # relay channel -> tap
-    print("communicate start")
-    channel.on('message')(write_fp.write)
-
-    done_reading = False
-
-    while (channel.bufferedAmount <= channel.bufferedAmountLowThreshold) and not done_reading:
-        data = read_fp.read(16384)
-        channel.send(data)
-        print("sfter send")
-        if not data:
-            done_reading = True
+# def communicate_start(channel):
+#     global write_fp
+#     global read_fp
+#     # relay channel -> tap
+#     print("communicate start")
+#     channel.on('message')(write_fp.write)
+#
+#     done_reading = False
+#
+#     while (channel.bufferedAmount <= channel.bufferedAmountLowThreshold) and not done_reading:
+#         data = read_fp.read(16384)
+#         channel.send(data)
+#         print("sfter send")
+#         if not data:
+#             done_reading = True
 
     # def file_reader(*args):
     #     global read_fp
@@ -98,13 +98,16 @@ def communicate_start(channel):
 
     #trans_loop.run_forever()
 
-async def run_answer(pc, signaling):
+async def run_answer(pc, signaling,  read_fp, write_fp):
     await signaling.connect()
     await signaling.send("join")
 
     @pc.on('datachannel')
     def on_datachannel(channel):
         global sctp_transport_established
+        #if channel.label != 'filexfer':
+        #    return
+
         start = time.time()
         octets = 0
         sctp_transport_established = True
@@ -112,8 +115,65 @@ async def run_answer(pc, signaling):
         @channel.on('message')
         async def on_message(message):
             nonlocal octets
-            global write_fp
 
+            if message:
+                octets += len(message)
+                write_fp.write(message)
+            else:
+                elapsed = time.time() - start
+                if elapsed == 0:
+                    elapsed = 0.001
+                print('received %d bytes in %.1f s (%.3f Mbps)' % (
+                    octets, elapsed, octets * 8 / elapsed / 1000000))
+                # say goodbye
+                #await signaling.send(None)
+
+        done_reading = False
+        def send_data():
+            nonlocal done_reading
+            global sctp_transport_established
+            print("call send_data")
+            sctp_transport_established = True
+
+            while (channel.bufferedAmount <= channel.bufferedAmountLowThreshold) and not done_reading:
+                data = read_fp.read(16384)
+                channel.send(data)
+                if not data:
+                    done_reading = True
+
+        channel.on('bufferedamountlow', send_data)
+        send_data()
+        #channel.on('bufferedamountlow', send_data)
+        #channel.on('open', send_data)
+    # @pc.on('datachannel')
+    # def on_datachannel(channel):
+        #channel_log(channel, '-', 'created by remote party')
+        #pass
+        #if channel.label == 'filexfer':
+            #communicate_start(channel)
+
+    await consume_signaling(pc, signaling)
+
+
+async def run_offer(pc, signaling, read_fp, write_fp):
+    await signaling.connect()
+    await signaling.send("join")
+
+    channel = pc.createDataChannel('filexfer')
+
+    @pc.on('datachannel')
+    def on_datachannel(channelarg):
+        global sctp_transport_established
+        nonlocal channel
+
+        start = time.time()
+        octets = 0
+        sctp_transport_established = True
+
+        @channel.on('message')
+        async def on_message(message):
+            nonlocal octets
+            print("received message")
             if message:
                 octets += len(message)
                 write_fp.write(message)
@@ -127,26 +187,30 @@ async def run_answer(pc, signaling):
                 # say goodbye
                 await signaling.send(None)
 
-    # @pc.on('datachannel')
-    # def on_datachannel(channel):
-        #channel_log(channel, '-', 'created by remote party')
-        #pass
-        #if channel.label == 'filexfer':
-            #communicate_start(channel)
-
-    await consume_signaling(pc, signaling)
 
 
-async def run_offer(pc, signaling):
-    await signaling.connect()
-    await signaling.send("join")
+    done_reading = False
+    def send_data():
+        nonlocal done_reading
+        global sctp_transport_established
 
-    channel = pc.createDataChannel('filexfer')
+        sctp_transport_established = True
+
+        while (channel.bufferedAmount <= channel.bufferedAmountLowThreshold) and not done_reading:
+            data = read_fp.read(16384)
+            channel.send(data)
+            if not data:
+                done_reading = True
+
+    channel.on('bufferedamountlow', send_data)
+    channel.on('open', send_data)
+
+
     #channel_log(channel, '-', 'created by local party')
 
-    @channel.on('open')
-    def on_open():
-        communicate_start(channel)
+    # @channel.on('open')
+    # def on_open():
+    #     communicate_start(channel)
 
     # send offer
     await pc.setLocalDescription(await pc.createOffer())
@@ -252,17 +316,17 @@ if __name__ == '__main__':
     signaling = create_signaling(args)
     pc = RTCPeerConnection()
 
-    ice_state_th = threading.Thread(target=ice_establishment_state)
-    ice_state_th.start()
+    # ice_state_th = threading.Thread(target=ice_establishment_state)
+    # ice_state_th.start()
 
     if args.role == 'send':
         read_fp = open(args.filename, 'rb')
         write_fp = open(args.filename + ".rsv", 'wb')
-        coro = run_offer(pc, signaling)
+        coro = run_offer(pc, signaling, read_fp, write_fp)
     else:
         read_fp = open(args.filename, 'rb')
         write_fp = open(args.filename + ".rsv", 'wb')
-        coro = run_answer(pc, signaling)
+        coro = run_answer(pc, signaling, read_fp, write_fp)
 
     try:
         loop = asyncio.get_event_loop()
