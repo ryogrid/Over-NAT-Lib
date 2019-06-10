@@ -122,12 +122,16 @@ async def run_offer(pc, signaling, fp):
         start = time.time()
         octets = 0
         sctp_transport_established = True
+        fp_pong = None
 
         @channel.on('message')
         async def on_message(message):
             nonlocal octets
+            nonlocal fp_pong
 
-            fp_pong = open(args.filename + ".pong", 'wb')
+            if fp_pong == None:
+                fp_pong = open(args.filename + ".pong", 'wb')
+
             if message:
                 octets += len(message)
                 fp_pong.write(message)
