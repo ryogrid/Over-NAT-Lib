@@ -12,6 +12,7 @@ def object_from_string(message_str):
     #print("object_from_string: " + message_str)
     try:
         message = json.loads(message_str)
+        print("json.loads:", file=sys.stderr)
     except:
         #print("json.loads failed.")
         #traceback.print_exc()
@@ -74,7 +75,8 @@ class WebsocketSignaling:
                 print("remote host says good bye!")
 
             return ret
-        except:
+        except Exception as e:
+            print(e, file=sys.stderr)
             #print("maybe JSON decode error occur at WebsocketSignaling.receive func")
             #traceback.print_exc()
             return "ignoalable error"

@@ -4,6 +4,7 @@ from geventwebsocket.handler import WebSocketHandler
 from gevent import pywsgi, sleep
 import traceback
 import copy
+import time
 
 ws_list = []
 channel_dict = {}
@@ -91,6 +92,7 @@ def accept_and_later_msg_handle(environ, start_response):
                         ws.sned(str(len(channel_dict[channel_signiture.users])))
                     else:
                         ws.sned(str(0))
+                    time.sleep(1)
                     break
                 elif "join" in signaling_msg:
                     if channel_signiture in channel_dict:
