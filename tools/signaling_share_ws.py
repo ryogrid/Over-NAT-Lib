@@ -76,7 +76,7 @@ class WebsocketSignaling:
 
             return ret
         except Exception as e:
-            print(e, file=sys.stderr)
+            #print(e, file=sys.stderr)
             #print("maybe JSON decode error occur at WebsocketSignaling.receive func")
             #traceback.print_exc()
             return "ignoalable error"
