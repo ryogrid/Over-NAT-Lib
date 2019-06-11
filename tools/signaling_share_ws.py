@@ -12,13 +12,15 @@ def object_from_string(message_str):
     #print("object_from_string: " + message_str)
     try:
         message = json.loads(message_str)
-        print("json.loads:", file=sys.stderr)
+        print("json.loads:" + str(message), file=sys.stderr)
     except:
         #print("json.loads failed.")
         #traceback.print_exc()
         return message_str
 
-    if message['type'] in ['answer', 'offer']:
+    if "members" in message:
+        return str(message['members'])
+    elif message['type'] in ['answer', 'offer']:
         return RTCSessionDescription(**message)
     elif message['type'] == 'candidate':
         candidate = candidate_from_sdp(message['candidate'].split(':', 1)[1])
@@ -76,10 +78,11 @@ class WebsocketSignaling:
 
             return ret
         except Exception as e:
-            #print(e, file=sys.stderr)
+            print(e, file=sys.stderr)
             #print("maybe JSON decode error occur at WebsocketSignaling.receive func")
             #traceback.print_exc()
-            return "ignoalable error"
+            #return "ignoalable error"
+            return data
 
     async def send(self, descr):
         data = object_to_string(descr)

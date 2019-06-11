@@ -94,11 +94,11 @@ def accept_and_later_msg_handle(environ, start_response):
                     else:
                         resp_msg = str(0)
                     print("send response of joined_message: " + resp_msg)
-                    ws.send(resp_msg)
+                    ws.send("{ \"members\":" + resp_msg + "}")
 
                     #time.sleep(2)
-                    #break
-                    continue
+                    break
+                    #continue
                 elif "join" in signaling_msg:
                     if channel_signiture in channel_dict:
                         channel_dict[channel_signiture].join(ws)

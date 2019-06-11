@@ -76,7 +76,7 @@ async def run_offer(pc, signaling, fp):
             print("cur_num_str: " + cur_num_str, file=sys.stderr)
             if "ignoalable error" in cur_num_str:
                 pass
-            elif "0" not in cur_num_str:
+            elif cur_num_str != "0":
                 break
 
             print("wait join of receiver", file=sys.stderr)
