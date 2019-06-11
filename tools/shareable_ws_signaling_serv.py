@@ -90,7 +90,7 @@ def accept_and_later_msg_handle(environ, start_response):
                 if "joined_members" in signaling_msg:
                     resp_msg = None
                     if channel_signiture in channel_dict:
-                        resp_msg = str(len(channel_dict[channel_signiture.users]))
+                        resp_msg = str(len(channel_dict[channel_signiture].users))
                     else:
                         resp_msg = str(0)
                     print("send response of joined_message: " + resp_msg)

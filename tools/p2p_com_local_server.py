@@ -77,6 +77,7 @@ async def run_offer(pc, signaling, fp):
             if "ignoalable error" in cur_num_str:
                 pass
             elif cur_num_str != "0":
+                await asyncio.sleep(2)
                 break
 
             print("wait join of receiver", file=sys.stderr)
