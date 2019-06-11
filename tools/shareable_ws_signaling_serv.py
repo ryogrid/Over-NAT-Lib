@@ -89,10 +89,10 @@ def accept_and_later_msg_handle(environ, start_response):
             try:
                 if "joined_members" in signaling_msg:
                     if channel_signiture in channel_dict:
-                        ws.sned(str(len(channel_dict[channel_signiture.users])))
+                        ws.send(str(len(channel_dict[channel_signiture.users])))
                     else:
-                        ws.sned(str(0))
-                    time.sleep(5)
+                        ws.send(str(0))
+                    time.sleep(2)
                     break
                 elif "join" in signaling_msg:
                     if channel_signiture in channel_dict:
