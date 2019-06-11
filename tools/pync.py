@@ -11,12 +11,9 @@ def server_loop():
     server.bind((args.target, args.port))
     server.listen(1)
 
-    print('Waiting for connections...')
+    print('Waiting for connections...', file=sys.stderr)
     clientsock, client_address = server.accept() #接続されればデータを格納
 
-    print(clientsock)
-    print(client_address)
-    print(platform.system())
     # if platform.system() == "Windows":
     #     import os, msvcrt
     #     msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
