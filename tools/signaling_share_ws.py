@@ -12,7 +12,7 @@ def object_from_string(message_str):
     #print("object_from_string: " + message_str)
     try:
         message = json.loads(message_str)
-        print("json.loads:" + str(message), file=sys.stderr)
+        #print("json.loads:" + str(message), file=sys.stderr)
     except:
         #print("json.loads failed.")
         #traceback.print_exc()
