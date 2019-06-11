@@ -86,7 +86,13 @@ def accept_and_later_msg_handle(environ, start_response):
         if ws not in ws_list:
             # join already existed Channel or create new Channel
             try:
-                if "join" in signaling_msg:
+                if "joined_members" in signaling_msg:
+                    if channel_signiture in channel_dict:
+                        ws.sned(str(len(channel_dict[channel_signiture.users])))
+                    else:
+                        ws.sned(str(0))
+                    break
+                elif "join" in signaling_msg:
                     if channel_signiture in channel_dict:
                         channel_dict[channel_signiture].join(ws)
                     else:
@@ -95,12 +101,6 @@ def accept_and_later_msg_handle(environ, start_response):
                         channel_dict[channel_signiture] = new_channel
                     ws_list.append(ws)
                     continue
-                elif "joined_members" in signaling_msg:
-                    if channel_signiture in channel_dict:
-                        ws.sned(str(len(channel_dict[channel_signiture.users])))
-                    else:
-                        ws.sned(str(0))
-                    break
                 else:
                     print("new connection (first message), but not invalid message" + signaling_msg)
                     break

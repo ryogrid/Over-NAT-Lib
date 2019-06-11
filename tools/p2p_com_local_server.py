@@ -72,9 +72,10 @@ async def run_offer(pc, signaling, fp):
         try:
             await signaling.connect()
             await signaling.send("joined_members")
-            cur_num_str = await signaling.recv()
+            cur_num_str = await signaling.receive()
             if "0" not in cur_num_str:
                 break
+            print("wait join of receiver", file=sys.stderr)
             await asyncio.sleep(1)
         except Exception as e:
             print(e, file=sys.stderr)
@@ -121,13 +122,11 @@ def ice_establishment_state():
         print("exit.")
 
 def work_as_parent():
-
-
-
+    pass
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Data channel file transfer')
-    parser.add_argment('hierarchy', choices=['parent', 'child'])
+    parser.add_argument('hierarchy', choices=['parent', 'child'])
     parser.add_argument('gid')
     parser.add_argument('filename')
     parser.add_argument('--role', choices=['send', 'receive'])
