@@ -10,10 +10,8 @@ import sys
 import sys
 import os
 from os import path
-#sys.path.append(path.dirname(path.abspath(__file__)) + "/../../")
 
 from aiortcdc import RTCPeerConnection, RTCSessionDescription
-#from aiortcdc.contrib.signaling_share_ws import add_signaling_arguments, create_signaling
 from signaling_share_ws import add_signaling_arguments, create_signaling
 
 sctp_transport_established = False
@@ -32,9 +30,9 @@ async def consume_signaling(pc, signaling):
                 await pc.setLocalDescription(await pc.createAnswer())
                 await signaling.send(pc.localDescription)
         elif isinstance(obj, str) and force_exited == False:
-            print("string recievd: " + obj)
+            print("string recievd: " + obj, file=sys.stderr)
         else:
-            print('Exiting')
+            print('Exiting', file=sys.stderr)
             break
 
 
@@ -60,7 +58,7 @@ async def run_answer(pc, signaling, filename):
                 if elapsed == 0:
                     elapsed = 0.001
                 print('received %d bytes in %.1f s (%.3f Mbps)' % (
-                    octets, elapsed, octets * 8 / elapsed / 1000000))
+                    octets, elapsed, octets * 8 / elapsed / 1000000), file=sys.stderr)
 
                 # say goodbye
                 await signaling.send(None)
@@ -70,6 +68,16 @@ async def run_answer(pc, signaling, filename):
 
 
 async def run_offer(pc, signaling, fp):
+    while True:
+        try:
+            await signaling.connect()
+            await signaling.send("joined_members")
+            cur_num_str = await signaling.recv()
+            if "0" not in cur_num_str:
+                break
+            await asyncio.sleep(1)
+        except Exception as e:
+            print(e, file=sys.stderr)
     await signaling.connect()
     await signaling.send("join")
 
@@ -103,7 +111,7 @@ def ice_establishment_state():
         #print("ice_establishment_state: " + pc.iceConnectionState)
         time.sleep(1)
     if sctp_transport_established == False:
-        print("hole punching to remote machine failed.")
+        print("hole punching to remote machine failed.", file=sys.stderr)
         force_exited = True
         try:
             loop.stop()
@@ -112,31 +120,40 @@ def ice_establishment_state():
             pass
         print("exit.")
 
+def work_as_parent():
+
+
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Data channel file transfer')
+    parser.add_argment('hierarchy', choices=['parent', 'child'])
     parser.add_argument('gid')
-    parser.add_argument('role', choices=['send', 'receive'])
     parser.add_argument('filename')
+    parser.add_argument('--role', choices=['send', 'receive'])
     parser.add_argument('--verbose', '-v', action='count')
     add_signaling_arguments(parser)
     args = parser.parse_args()
 
+    colo = None
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
 
-    signaling = create_signaling(args)
-    pc = RTCPeerConnection()
-
-    ice_state_th = threading.Thread(target=ice_establishment_state)
-    ice_state_th.start()
-
-    if args.role == 'send':
-        fp = open(args.filename, 'rb')
-        coro = run_offer(pc, signaling, fp)
+    if args.hierarchy == 'parent':
+        colo = work_as_parent()
     else:
-        fp = open(args.filename, 'wb')
-        coro = run_answer(pc, signaling, fp)
+        signaling = create_signaling(args)
+        pc = RTCPeerConnection()
+
+        ice_state_th = threading.Thread(target=ice_establishment_state)
+        ice_state_th.start()
+
+        if args.role == 'send':
+            fp = open(args.filename, 'rb')
+            coro = run_offer(pc, signaling, fp)
+        else:
+            fp = open(args.filename, 'wb')
+            coro = run_answer(pc, signaling, fp)
 
     try:
         # run event loop

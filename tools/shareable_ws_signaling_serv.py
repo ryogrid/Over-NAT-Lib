@@ -51,6 +51,7 @@ class Channel(object):
         if len(self.users) == 0:
             del channel_dict[self.channel_sig]
 
+# a call handles single client forever
 def accept_and_later_msg_handle(environ, start_response):
     #TODO: need code checking whether each connection is alive by heartbeat msg send on signaling_app func
     global ws_list
@@ -94,6 +95,12 @@ def accept_and_later_msg_handle(environ, start_response):
                         channel_dict[channel_signiture] = new_channel
                     ws_list.append(ws)
                     continue
+                elif "joined_members" in signaling_msg:
+                    if channel_signiture in channel_dict:
+                        ws.sned(str(len(channel_dict[channel_signiture.users]))
+                    else:
+                        ws.sned(str(0))
+                    break
                 else:
                     print("new connection (first message), but not invalid message" + signaling_msg)
                     break
@@ -118,28 +125,31 @@ def clean_disconnected_client_ws_objs_and_channels():
     global ws_list
     global channel_dict
 
-    remove_list = []
-    for s in ws_list:
-        try:
-            s.send("check_alive_msg")
-        except:
-            # Possibility to execute code when connection is closed
-            print("disconnected client found.")
-            #traceback.print_exc()
-            remove_list.append(s)
-            next
-    for s in remove_list:
-        ws_list.remove(s)
-        # for channel_sig in channel_dict.keys():
-        #     channel_obj = channel_dict[channel_sig]
-        #     print("user remove len (BEFORE):" + str(len(channel_obj.users)))
-        #     channel_obj.users.remove(s)
-        #     print("user remove len (AFTER):" + str(len(channel_obj.users)))
+    try:
+        remove_list = []
+        for s in ws_list:
+            try:
+                s.send("check_alive_msg")
+            except:
+                # Possibility to execute code when connection is closed
+                print("disconnected client found.")
+                #traceback.print_exc()
+                remove_list.append(s)
+                next
+        for s in remove_list:
+            ws_list.remove(s)
+            for channel_sig in channel_dict.keys():
+                channel_obj = channel_dict[channel_sig]
+                print("user remove len (BEFORE):" + str(len(channel_obj.users)))
+                channel_obj.users.remove(s)
+                print("user remove len (AFTER):" + str(len(channel_obj.users)))
 
-    dict_keys = copy.copy(list(channel_dict.keys()))
-    for ch_key in dict_keys:
-        channel_dict[ch_key].dispose_if_empty()
-    print("finished clean_disconnected_client_ws_objs_and_channels")
+        dict_keys = copy.copy(list(channel_dict.keys()))
+        for ch_key in dict_keys:
+            channel_dict[ch_key].dispose_if_empty()
+        print("finished clean_disconnected_client_ws_objs_and_channels")
+    except Exception as e:
+        print(e)
 
 def signaling_app(environ, start_response):
     clean_disconnected_client_ws_objs_and_channels()
