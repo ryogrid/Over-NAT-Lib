@@ -87,12 +87,13 @@ async def run_offer(pc, signaling, fp):
         global sctp_transport_established
 
         sctp_transport_established = True
+        print("send_data")
 
-        while (channel.bufferedAmount <= channel.bufferedAmountLowThreshold) and not done_reading:
-            data = fp.read(16384)
-            channel.send(data)
-            if not data:
-                done_reading = True
+        # while (channel.bufferedAmount <= channel.bufferedAmountLowThreshold) and not done_reading:
+        #     data = fp.read(16384)
+        #     channel.send(data)
+        #     if not data:
+        #         done_reading = True
 
     channel.on('bufferedamountlow', send_data)
     channel.on('open', send_data)
