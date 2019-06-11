@@ -73,6 +73,7 @@ async def run_offer(pc, signaling, fp):
             await signaling.connect()
             await signaling.send("joined_members")
             cur_num_str = await signaling.receive()
+            print("cur_num_str: " + cur_num_str, file=sys.stderr)
             if "0" not in cur_num_str:
                 break
             print("wait join of receiver", file=sys.stderr)
