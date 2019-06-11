@@ -14,10 +14,6 @@ def server_loop():
     print('Waiting for connections...', file=sys.stderr)
     clientsock, client_address = server.accept() #接続されればデータを格納
 
-    # if platform.system() == "Windows":
-    #     import os, msvcrt
-    #     msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
-
     fileno = sys.stdout.fileno()
     with open(fileno, "wb", closefd=False) as f:
         while True:
@@ -27,16 +23,29 @@ def server_loop():
               break
             else:
                 f.write(rcvmsg)
-                #sys.stdout.write(rcvmsg.decode())
-            #sys.stdout.write(rcvmsg)
-        # print('Type message...')
-        # s_msg = input().replace('b', '').encode('utf-8')
-        # if s_msg == '':
-        #   break
-        # print('Wait...')
 
     clientsock.close()
 
+def distributer_loop():
+    if not args.target:
+        args.target = '0.0.0.0'
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind((args.target, args.port))
+    server.listen()
+    while True:
+        print('Waiting for connections...', file=sys.stderr)
+        clientsock, client_address = server.accept() #接続されればデータを格納
+
+        with open(args.file, "rb") as f:
+            while True:
+                data = f.read(1024)
+                #print('Received -> %s' % (rcvmsg))
+                if data == None or len(data) == 0:
+                    break
+                else:
+                    clientsock.sendall(data)
+
+        clientsock.close()
 
 def client_loop():
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -44,10 +53,6 @@ def client_loop():
     try:
         client.connect((args.target, args.port))
 
-        # if platform.system() == "Windows":
-        #     print("set stdin mode to binary")
-        #     import os, msvcrt
-        #     msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
         fileno = sys.stdin.fileno()
         with open(fileno, "rb", closefd=False) as f:
             while True:
@@ -56,11 +61,33 @@ def client_loop():
                 if data == None or len(data) == 0:
                     break
                 else:
-                    client.send(data)
+                    client.sendall(data)
                     #client.send(data.encode())
     except Exception as e:
         print(e)
         print('Exception! Exiting.')
+        client.close()
+
+def receiver_loop():
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    try:
+        client.connect((args.target, args.port))
+
+        fileno = sys.stdout.fileno()
+        with open(fileno, "wb", closefd=False) as f:
+            while True:
+                rcvmsg = client.recv(1024)
+                #print('Received -> %s' % (rcvmsg))
+                if rcvmsg == None or len(rcvmsg) == 0:
+                    # print(rcvmsg, file=sys.stderr)
+                    # print('break', file=sys.stderr)
+                    break
+                else:
+                    f.write(rcvmsg)
+    except Exception as e:
+        print(e, file=sys.stderr)
+        print('Exception! Exiting.', file=sys.stderr)
         client.close()
 
 if __name__ == '__main__':
@@ -68,20 +95,29 @@ if __name__ == '__main__':
                 description='BHP Net Tool',
                 epilog='''\
 Examples:
-    pync.py -t 192.168.0.1 -p 100100 -c -t 127.0.0.1 -p 10000
-    pync.py -t 192.168.0.1 -p 100100 -s -p 10000
-    echo 'ABCDEFGHI' | python pync.py -t 192.168.0.1 -p 10000''')
+    type hoge.mp4 | python pync.py -c -t 127.0.0.1 -p 10000
+    python pync.py -r -t 127.0.0.1 -p 10100 > bar.mp4
+    python pync.py -s -p 10000 > foo.mp4
+    python pync.py -d -p 10100 -f bar.mp4
+    ''')
 
-parser.add_argument('-c', '--client', help='run as client', action='store_true')
+parser.add_argument('-c', '--client', help='run as client (sender)', action='store_true')
 parser.add_argument('-s', '--server', help='listen on [host]:[port] for incoming connections', action='store_true')
+parser.add_argument('-r', '--receiver', help='run as client (receiver)', action='store_true')
+parser.add_argument('-d', '--distributer', help='listen on [host]:[port] for incoming connections and send specified file contents to client', action='store_true')
+parser.add_argument('-f', '--file', default=None, help='distribute file for distributer')
 parser.add_argument('-t', '--target', default=None)
 parser.add_argument('-p', '--port', default=None, type=int, required=True)
 args = parser.parse_args()
 
 if args.client and args.target and args.port:
     client_loop()
+if args.receiver and args.target and args.port:
+    receiver_loop()
 elif args.server and args.port:
     server_loop()
+elif args.distributer and args.port and args.file:
+    distributer_loop()
 else:
     parser.print_help()
     sys.exit(1)
