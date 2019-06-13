@@ -1,3 +1,4 @@
 aiortc-dc >= 0.5.5
 gevent-websocket >= 0.10.1
 websockets >= 7.0
+websocket-client-py3 >= 0.15.0
