@@ -54,7 +54,6 @@ class Channel(object):
 
 # a call handles single client forever
 def accept_and_later_msg_handle(environ, start_response):
-    #TODO: need code checking whether each connection is alive by heartbeat msg send on signaling_app func
     global ws_list
     global channel_dict
 
@@ -70,6 +69,9 @@ def accept_and_later_msg_handle(environ, start_response):
         msg = ws.receive()
         if msg is None:
             break
+
+        if msg.endswith("_chsig:keepalive"):
+            continue
 
         print("recieved msg: " + msg)
 

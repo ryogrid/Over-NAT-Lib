@@ -13,6 +13,9 @@ from aiortcdc import RTCPeerConnection, RTCSessionDescription
 
 from signaling_share_ws import add_signaling_arguments, create_signaling
 
+# application level ws communication
+import websocket
+
 sctp_transport_established = False
 force_exited = False
 
@@ -24,6 +27,7 @@ signaling = None
 clientsock = None
 client_address = None
 done_reading = False
+send_ws = None
 
 async def consume_signaling(pc, signaling):
     global force_exited
@@ -44,22 +48,7 @@ async def consume_signaling(pc, signaling):
                     await signaling.send(pc.localDescription)
             elif isinstance(obj, str) and force_exited == False:
                 print("string recievd: " + obj, file=sys.stderr)
-                if "receiver_connected" in obj:
-                    remote_stdout_connected = True
-                    if rw_buf.getbuffer().nbytes != 0:
-                        send_data()
-                    continue
-                elif "receiver_disconnected" in obj:
-                    remote_stdout_connected = False
-                    done_reading = False
-                    continue
-                if "sender_connected" in obj:
-                    remote_stdin_connected = True
-                    continue
-                elif "sender_disconnected" in obj:
-                    remote_stdin_connected = False
-                    clientsock.close()
-                    continue
+                continue
             else:
                 print('Exiting', file=sys.stderr)
                 break
@@ -256,6 +245,67 @@ def receiver_server():
         except Exception as e:
              print(e, file=sys.stderr)
 
+def ws_send_wrapper(msg):
+    if args.role == 'send':
+        send_ws.send(args.gid + "stor" + "_chsig:" + msg)
+    else:
+        send_ws.send(args.gid + "rtos" + "_chsig:" + msg)
+
+def send_keep_alive():
+    while True:
+        ws_send_wrapper(send_ws, "keepalive")
+        time.sleep(5)
+
+def setup_ws_sub_sender():
+    global send_ws
+    send_ws = websocket.create_connection("ws://" + args.signalng_host + ":" + str(args.signaling_port) + "/")
+    ws_send_wrapper("join")
+
+    ws_keep_alive_th = threading.Thread(target=send_keep_alive)
+    ws_keep_alive_th.start()
+
+def ws_sub_receiver():
+    def on_message(ws, message):
+        global remote_stdout_connected
+        global remote_stdin_connected
+        global done_reading
+
+        print(message,  file=sys.stderr)
+
+        if "receiver_connected" in message:
+            remote_stdout_connected = True
+            if rw_buf.getbuffer().nbytes != 0:
+                send_data()
+        elif "receiver_disconnected" in message:
+            remote_stdout_connected = False
+            done_reading = False
+        elif "sender_connected" in message:
+            remote_stdin_connected = True
+        elif "sender_disconnected" in message:
+            remote_stdin_connected = False
+            clientsock.close()
+
+    def on_error(ws, error):
+        print(error)
+
+    def on_close(ws):
+        print("### closed ###")
+
+    def on_open(ws):
+        print("receiver app level ws opend")
+        if args.role == 'send':
+            ws.send(args.gid + "stor" + "_chsig:join")
+        else:
+            ws.send(args.gid + "rtos" + "_chsig:join")
+
+    websocket.enableTrace(True)
+    ws = websocket.WebSocketApp("ws://" + args.signalng_host + ":" + str(args.signaling_port) + "/",
+                                    on_message=on_message,
+                                    on_error=on_error,
+                                    on_close=on_close)
+    ws.on_open = on_open
+    ws.run_forever()
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Data channel file transfer')
     parser.add_argument('hierarchy', choices=['parent', 'child'])
@@ -278,6 +328,10 @@ if __name__ == '__main__':
 
         ice_state_th = threading.Thread(target=ice_establishment_state)
         ice_state_th.start()
+
+        setup_ws_sub_sender()
+        send_ws_th = threading.Thread(target=ws_sub_receiver)
+        send_ws_th.start()
 
         if args.role == 'send':
             #fp = open(args.filename, 'rb')
