@@ -110,9 +110,9 @@ parser.add_argument('-t', '--target', default="127.0.0.1")
 parser.add_argument('-p', '--port', default=None, type=int, required=True)
 args = parser.parse_args()
 
-if args.client and args.target and args.port:
+if args.client and args.port != 0:
     client_loop()
-if args.receiver and args.target and args.port:
+elif args.receiver and args.target and args.port:
     receiver_loop()
 elif args.server and args.port:
     server_loop()

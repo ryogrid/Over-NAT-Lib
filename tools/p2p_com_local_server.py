@@ -159,10 +159,10 @@ def work_as_parent():
 def sender_server():
     global rw_buf
 
-    if not args.target:
-        args.target = '0.0.0.0'
+    #if not args.target:
+    #    args.target = '0.0.0.0'
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind((args.target, args.port))
+    server.bind(("127.0.0.1", 10100))
     server.listen()
 
     rw_buf = getInMemoryBufferedRWPair()
@@ -198,10 +198,10 @@ def sender_server():
 def receiver_server():
     global rw_buf
 
-    if not args.target:
-        args.target = '0.0.0.0'
+    #if not args.target:
+    #    args.target = '0.0.0.0'
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind((args.target, args.port))
+    server.bind(("127.0.0.1", 10200))
     server.listen()
 
     rw_buf = getInMemoryBufferedRWPair()
@@ -254,9 +254,13 @@ if __name__ == '__main__':
 
         if args.role == 'send':
             #fp = open(args.filename, 'rb')
+            sender_th = threading.Thread(target=sender_server())
+            sender_th.start()
             coro = run_offer(pc, signaling)
         else:
             #fp = open(args.filename, 'wb')
+            receiver_th = threading.Thread(target=receiver_server())
+            receiver_th.start()
             coro = run_answer(pc, signaling)
 
     try:
