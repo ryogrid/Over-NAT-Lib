@@ -1,8 +1,7 @@
 import sys
 import socket
 import argparse
-from threading import Thread
-import platform
+from io import BufferedRWPair, BufferedWriter, BufferedReader, BytesIO
 
 def server_loop():
     if not args.target:
@@ -58,10 +57,13 @@ def client_loop():
             while True:
                 #data = sys.stdin.read()
                 data = f.read(1024)
+                print(len(data))
                 if data == None or len(data) == 0:
                     break
                 else:
-                    client.sendall(data)
+                    ret = client.sendall(data)
+                    print("ret of sendall:" +  str(ret))
+
                     #client.send(data.encode())
     except Exception as e:
         print(e)

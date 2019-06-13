@@ -16,45 +16,55 @@ from signaling_share_ws import add_signaling_arguments, create_signaling
 sctp_transport_established = False
 force_exited = False
 
+channel = None
 remote_stdout_connected = False
-remote_stdout_connected = False
+remote_stdin_connected = False
 rw_buf = None
 signaling = None
 clientsock = None
+client_address = None
+done_reading = False
 
 async def consume_signaling(pc, signaling):
     global force_exited
     global remote_stdout_connected
     global remote_stin_connected
+    global clientsock
 
     while True:
-        obj = await signaling.receive()
+        try:
+            obj = await signaling.receive()
 
-        if isinstance(obj, RTCSessionDescription):
-            await pc.setRemoteDescription(obj)
+            if isinstance(obj, RTCSessionDescription):
+                await pc.setRemoteDescription(obj)
 
-            if obj.type == 'offer':
-                # send answer
-                await pc.setLocalDescription(await pc.createAnswer())
-                await signaling.send(pc.localDescription)
-        elif isinstance(obj, str) and force_exited == False:
-            print("string recievd: " + obj, file=sys.stderr)
-            if "receiver_connected" in obj:
-                remote_stdout_connected = True
-                continue
-            elif "receiver_disconnected" in obj:
-                remote_stdout_connected = False
-                continue
-            if "sender_connected" in obj:
-                remote_stdin_connected = True
-                continue
-            elif "sender_disconnected" in obj:
-                remote_stdin_connected = False
-                clientsock.close()
-                continue
-        else:
-            print('Exiting', file=sys.stderr)
-            break
+                if obj.type == 'offer':
+                    # send answer
+                    await pc.setLocalDescription(await pc.createAnswer())
+                    await signaling.send(pc.localDescription)
+            elif isinstance(obj, str) and force_exited == False:
+                print("string recievd: " + obj, file=sys.stderr)
+                if "receiver_connected" in obj:
+                    remote_stdout_connected = True
+                    if rw_buf.getbuffer().nbytes != 0:
+                        send_data()
+                    continue
+                elif "receiver_disconnected" in obj:
+                    remote_stdout_connected = False
+                    done_reading = False
+                    continue
+                if "sender_connected" in obj:
+                    remote_stdin_connected = True
+                    continue
+                elif "sender_disconnected" in obj:
+                    remote_stdin_connected = False
+                    clientsock.close()
+                    continue
+            else:
+                print('Exiting', file=sys.stderr)
+                break
+        except Exception as e:
+            print(e, file=sys.stderr)
 
 
 async def run_answer(pc, signaling):
@@ -73,55 +83,61 @@ async def run_answer(pc, signaling):
 
             if message:
                 octets += len(message)
-                fp.write(message)
+                if clientsock != None:
+                    clientsock.sendall(message)
             else:
                 elapsed = time.time() - start
                 if elapsed == 0:
                     elapsed = 0.001
                 print('received %d bytes in %.1f s (%.3f Mbps)' % (
                     octets, elapsed, octets * 8 / elapsed / 1000000), file=sys.stderr)
+                if clientsock != None:
+                    clientsock.close()
 
                 # say goodbye
-                await signaling.send(None)
+                #await signaling.send(None)
 
     await signaling.send("join")
     await consume_signaling(pc, signaling)
 
+def send_data():
+    global done_reading
+    global sctp_transport_established
+
+    sctp_transport_established = True
+
+    while (channel.bufferedAmount <= channel.bufferedAmountLowThreshold) and not done_reading and remote_stdout_connected:
+        print("send_data", file=sys.stderr)
+        data = rw_buf.read(1024)
+        #data = rw_buf.getvalue()
+        channel.send(data)
+        if not data:
+              done_reading = True
 
 async def run_offer(pc, signaling):
+    global channel
+
     while True:
         try:
             await signaling.connect()
             await signaling.send("joined_members")
             cur_num_str = await signaling.receive()
-            print("cur_num_str: " + cur_num_str, file=sys.stderr)
+            #print("cur_num_str: " + cur_num_str, file=sys.stderr)
             if "ignoalable error" in cur_num_str:
                 pass
             elif cur_num_str != "0":
                 await asyncio.sleep(2)
                 break
 
-            print("wait join of receiver", file=sys.stderr)
+            #print("wait join of receiver", file=sys.stderr)
             await asyncio.sleep(1)
         except Exception as e:
             print(e, file=sys.stderr)
     await signaling.connect()
     await signaling.send("join")
 
-    done_reading = False
+    #done_reading = False
     channel = pc.createDataChannel('filexfer')
-
-    def send_data():
-        nonlocal done_reading
-        global sctp_transport_established
-
-        sctp_transport_established = True
-
-        while (channel.bufferedAmount <= channel.bufferedAmountLowThreshold) and not done_reading:
-            data = rw_buf.read(1024)
-            channel.send(data)
-            if not data:
-                done_reading = True
 
     channel.on('bufferedamountlow', send_data)
     channel.on('open', send_data)
@@ -147,11 +163,11 @@ def ice_establishment_state():
             pass
         print("exit.")
 
-def getInMemoryBufferedRWPair():
-    buf_size = 1024 * 1024 * 10
-    read_buf = [0] * buf_size
-    write_buf = [0] * buf_size
-    return BufferedRWPair(BufferedReader(BytesIO(read_buf), buf_size), BufferedWriter(BytesIO(write_buf)), buf_size)
+# def getInMemoryBufferedRWPair():
+#     buf_size = 1024 * 1024 * 10
+#     read_buf = bytearray(buf_size)
+#     write_buf = bytearray(buf_size)
+#     return BufferedRWPair(BufferedReader(BytesIO(read_buf), buf_size), BufferedWriter(BytesIO(write_buf)), buf_size)
 
 def work_as_parent():
     pass
@@ -161,24 +177,36 @@ def sender_server():
 
     #if not args.target:
     #    args.target = '0.0.0.0'
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind(("127.0.0.1", 10100))
-    server.listen()
+    try:
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.bind(("127.0.0.1", 10100))
+        server.listen()
+        # server.setsockopt(
+        #     socket.SOL_SOCKET,
+        #     socket.SO_RCVBUF,
+        #     1024)
+    except Exception as e:
+        print(e, file=sys.stderr)
 
-    rw_buf = getInMemoryBufferedRWPair()
+    rw_buf = BytesIO()
 
     print('Waiting for connections...', file=sys.stderr)
     while True:
         try:
             clientsock, client_address = server.accept()
+            print("new client connected.")
 
-            # wait remote server is connected with some program
+            # # wait remote server is connected with some program
             while remote_stdout_connected == False:
+                print("wait remote_stdout_connected", file=sys.stderr)
                 time.sleep(1)
 
             while True:
+                recvmsg = None
                 try:
                     rcvmsg = clientsock.recv(1024)
+                    print("received message from client")
+                    print(len(rcvmsg))
                 except Exception as e:
                     print(e,  file=sys.stderr)
                     print("maybe client disconnect")
@@ -190,6 +218,7 @@ def sender_server():
                   break
                 else:
                     rw_buf.write(rcvmsg)
+            send_data()
         except Exception as e:
             print(e, file=sys.stderr)
 
@@ -197,6 +226,7 @@ def sender_server():
 
 def receiver_server():
     global rw_buf
+    global client_sock, client_address
 
     #if not args.target:
     #    args.target = '0.0.0.0'
@@ -204,30 +234,27 @@ def receiver_server():
     server.bind(("127.0.0.1", 10200))
     server.listen()
 
-    rw_buf = getInMemoryBufferedRWPair()
+    #rw_buf = getInMemoryBufferedRWPair()
 
     print('Waiting for connections...', file=sys.stderr)
     while True:
         try:
             clientsock, client_address = server.accept()
+            print("new client connected.")
 
-            # wait remote server is connected with some program
-            while remote_stdout_connected == False:
-                time.sleep(1)
-
-            while True:
-                try:
-                    rcvmsg = rw_buf.read(1024)
-                except Exception as e:
-                    print(e,  file=sys.stderr)
-
-                #print('Received -> %s' % (rcvmsg))
-                if rcvmsg == None or len(rcvmsg) == 0:
-                  break
-                else:
-                    clientsock.sendall(rcvmsg)
+        #     while True:
+        #         try:
+        #             rcvmsg = rw_buf.read(1024)
+        #         except Exception as e:
+        #             print(e,  file=sys.stderr)
+        #
+        #         #print('Received -> %s' % (rcvmsg))
+        #         if rcvmsg == None or len(rcvmsg) == 0:
+        #           break
+        #         else:
+        #             clientsock.sendall(rcvmsg)
         except Exception as e:
-            print(e, file=sys.stderr)
+             print(e, file=sys.stderr)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Data channel file transfer')
@@ -254,12 +281,12 @@ if __name__ == '__main__':
 
         if args.role == 'send':
             #fp = open(args.filename, 'rb')
-            sender_th = threading.Thread(target=sender_server())
+            sender_th = threading.Thread(target=sender_server)
             sender_th.start()
             coro = run_offer(pc, signaling)
         else:
             #fp = open(args.filename, 'wb')
-            receiver_th = threading.Thread(target=receiver_server())
+            receiver_th = threading.Thread(target=receiver_server)
             receiver_th.start()
             coro = run_answer(pc, signaling)
 
