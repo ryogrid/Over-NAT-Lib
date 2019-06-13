@@ -3,22 +3,30 @@
 import argparse
 import asyncio
 import logging
-import time
+import socket
+import sys
 import threading
-import sys
-
-import sys
-import os
-from os import path
+import time
+from io import BufferedRWPair, BufferedWriter, BufferedReader, BytesIO
 
 from aiortcdc import RTCPeerConnection, RTCSessionDescription
+
 from signaling_share_ws import add_signaling_arguments, create_signaling
 
 sctp_transport_established = False
 force_exited = False
 
+remote_stdout_connected = False
+remote_stdout_connected = False
+rw_buf = None
+signaling = None
+clientsock = None
+
 async def consume_signaling(pc, signaling):
     global force_exited
+    global remote_stdout_connected
+    global remote_stin_connected
+
     while True:
         obj = await signaling.receive()
 
@@ -31,12 +39,25 @@ async def consume_signaling(pc, signaling):
                 await signaling.send(pc.localDescription)
         elif isinstance(obj, str) and force_exited == False:
             print("string recievd: " + obj, file=sys.stderr)
+            if "receiver_connected" in obj:
+                remote_stdout_connected = True
+                continue
+            elif "receiver_disconnected" in obj:
+                remote_stdout_connected = False
+                continue
+            if "sender_connected" in obj:
+                remote_stdin_connected = True
+                continue
+            elif "sender_disconnected" in obj:
+                remote_stdin_connected = False
+                clientsock.close()
+                continue
         else:
             print('Exiting', file=sys.stderr)
             break
 
 
-async def run_answer(pc, signaling, filename):
+async def run_answer(pc, signaling):
     await signaling.connect()
 
     @pc.on('datachannel')
@@ -67,7 +88,7 @@ async def run_answer(pc, signaling, filename):
     await consume_signaling(pc, signaling)
 
 
-async def run_offer(pc, signaling, fp):
+async def run_offer(pc, signaling):
     while True:
         try:
             await signaling.connect()
@@ -97,7 +118,7 @@ async def run_offer(pc, signaling, fp):
         sctp_transport_established = True
 
         while (channel.bufferedAmount <= channel.bufferedAmountLowThreshold) and not done_reading:
-            data = fp.read(16384)
+            data = rw_buf.read(1024)
             channel.send(data)
             if not data:
                 done_reading = True
@@ -126,14 +147,93 @@ def ice_establishment_state():
             pass
         print("exit.")
 
+def getInMemoryBufferedRWPair():
+    buf_size = 1024 * 1024 * 10
+    read_buf = [0] * buf_size
+    write_buf = [0] * buf_size
+    return BufferedRWPair(BufferedReader(BytesIO(read_buf), buf_size), BufferedWriter(BytesIO(write_buf)), buf_size)
+
 def work_as_parent():
     pass
+
+def sender_server():
+    global rw_buf
+
+    if not args.target:
+        args.target = '0.0.0.0'
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind((args.target, args.port))
+    server.listen()
+
+    rw_buf = getInMemoryBufferedRWPair()
+
+    print('Waiting for connections...', file=sys.stderr)
+    while True:
+        try:
+            clientsock, client_address = server.accept()
+
+            # wait remote server is connected with some program
+            while remote_stdout_connected == False:
+                time.sleep(1)
+
+            while True:
+                try:
+                    rcvmsg = clientsock.recv(1024)
+                except Exception as e:
+                    print(e,  file=sys.stderr)
+                    print("maybe client disconnect")
+                    signaling.send("sender_disconnected")
+
+
+                #print('Received -> %s' % (rcvmsg))
+                if rcvmsg == None or len(rcvmsg) == 0:
+                  break
+                else:
+                    rw_buf.write(rcvmsg)
+        except Exception as e:
+            print(e, file=sys.stderr)
+
+    clientsock.close()
+
+def receiver_server():
+    global rw_buf
+
+    if not args.target:
+        args.target = '0.0.0.0'
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind((args.target, args.port))
+    server.listen()
+
+    rw_buf = getInMemoryBufferedRWPair()
+
+    print('Waiting for connections...', file=sys.stderr)
+    while True:
+        try:
+            clientsock, client_address = server.accept()
+
+            # wait remote server is connected with some program
+            while remote_stdout_connected == False:
+                time.sleep(1)
+
+            while True:
+                try:
+                    rcvmsg = rw_buf.read(1024)
+                except Exception as e:
+                    print(e,  file=sys.stderr)
+
+                #print('Received -> %s' % (rcvmsg))
+                if rcvmsg == None or len(rcvmsg) == 0:
+                  break
+                else:
+                    clientsock.sendall(rcvmsg)
+        except Exception as e:
+            print(e, file=sys.stderr)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Data channel file transfer')
     parser.add_argument('hierarchy', choices=['parent', 'child'])
     parser.add_argument('gid')
-    parser.add_argument('filename')
+    #parser.add_argument('filename')
     parser.add_argument('--role', choices=['send', 'receive'])
     parser.add_argument('--verbose', '-v', action='count')
     add_signaling_arguments(parser)
@@ -153,11 +253,11 @@ if __name__ == '__main__':
         ice_state_th.start()
 
         if args.role == 'send':
-            fp = open(args.filename, 'rb')
-            coro = run_offer(pc, signaling, fp)
+            #fp = open(args.filename, 'rb')
+            coro = run_offer(pc, signaling)
         else:
-            fp = open(args.filename, 'wb')
-            coro = run_answer(pc, signaling, fp)
+            #fp = open(args.filename, 'wb')
+            coro = run_answer(pc, signaling)
 
     try:
         # run event loop
@@ -167,7 +267,7 @@ if __name__ == '__main__':
         except KeyboardInterrupt:
             pass
         finally:
-            fp.close()
+            #fp.close()
             loop.run_until_complete(pc.close())
             loop.run_until_complete(signaling.close())
     except:

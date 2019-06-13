@@ -99,6 +99,22 @@ def accept_and_later_msg_handle(environ, start_response):
                     #time.sleep(2)
                     break
                     #continue
+                elif "receiver_connected" in signaling_msg:
+                    print("receiver_connected msg received")
+                    ws.send("receiver_connected")
+                    continue
+                elif "receiver_disconnected" in signaling_msg:
+                    print("receiver_disconnected msg received")
+                    ws.send("receiver_disconnected")
+                    continue
+                elif "sender_connected" in signaling_msg:
+                    print("sender_connected msg received")
+                    ws.send("sender_connected")
+                    continue
+                elif "sender_disconnected" in signaling_msg:
+                    print("sender_disconnected msg received")
+                    ws.send("sender_disconnected")
+                    continue
                 elif "join" in signaling_msg:
                     if channel_signiture in channel_dict:
                         channel_dict[channel_signiture].join(ws)

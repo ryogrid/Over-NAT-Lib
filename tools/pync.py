@@ -106,7 +106,7 @@ parser.add_argument('-s', '--server', help='listen on [host]:[port] for incoming
 parser.add_argument('-r', '--receiver', help='run as client (receiver)', action='store_true')
 parser.add_argument('-d', '--distributer', help='listen on [host]:[port] for incoming connections and send specified file contents to client', action='store_true')
 parser.add_argument('-f', '--file', default=None, help='distribute file for distributer')
-parser.add_argument('-t', '--target', default=None)
+parser.add_argument('-t', '--target', default="127.0.0.1")
 parser.add_argument('-p', '--port', default=None, type=int, required=True)
 args = parser.parse_args()
 
