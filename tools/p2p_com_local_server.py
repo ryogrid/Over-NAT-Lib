@@ -207,7 +207,7 @@ def sender_server():
             while True:
                 rcvmsg = None
                 try:
-                    rcvmsg = clientsock.recv(1024)
+                    rcvmsg = clientsock.recv(256)
                     print("received message from client")
                     print(len(rcvmsg))
                 except Exception as e:
@@ -223,7 +223,7 @@ def sender_server():
                 else:
                     print("fifo_q.write(rcvmsg)")
                     fifo_q.put(rcvmsg)
-            send_data_prepared = True
+                    send_data_prepared = True
             #send_data()
         except:
             traceback.print_exc()
