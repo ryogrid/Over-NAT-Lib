@@ -125,7 +125,7 @@ async def run_answer(pc, signaling):
             global clientsock
 
             print("message event fired")
-            if message:
+            if len(message) > 0:
                 octets += len(message)
                 if clientsock != None:
                     clientsock.sendall(message)
@@ -185,10 +185,13 @@ async def run_offer(pc, signaling):
                     # data = fifo_q.getvalue()
                     print("send_data:" + str(len(data)))
                     channel_sender.send(data)
-                    if not data:
-                        done_reading = True
+                    # if not data:
+                    #     done_reading = True
                 else:
                     done_reading = True
+                    # notify sending finish
+                    #channel_sender.send(bytearray())
+                    channel_sender.send(bytes("", encoding="utf-8"))
             except Exception as e:
                 print(e)
 
