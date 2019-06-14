@@ -7,11 +7,13 @@ import socket
 import sys
 import threading
 import time
-from io import BufferedRWPair, BufferedWriter, BufferedReader, BytesIO
+from io import BufferedRWPair, BufferedWriter, BufferedReader, BytesIO, StringIO
 
 from aiortcdc import RTCPeerConnection, RTCSessionDescription
 
 from signaling_share_ws import add_signaling_arguments, create_signaling
+
+from StringIO import StringIO
 
 # application level ws communication
 import websocket
@@ -30,11 +32,59 @@ done_reading = False
 send_ws = None
 sub_channel_sig = None
 
+class FifoBuffer(object):
+    def __init__(self):
+        self.buf = StringIO()
+        self.available = 0    # Bytes available for reading
+        self.size = 0
+        self.write_fp = 0
+
+    def read(self, size = None):
+        """Reads size bytes from buffer"""
+        if size is None or size > self.available:
+            size = self.available
+        size = max(size, 0)
+
+        result = self.buf.read(size)
+        self.available -= size
+
+        if len(result) < size:
+            self.buf.seek(0)
+            result += self.buf.read(size - len(result))
+
+        return result
+
+
+    def write(self, data):
+        """Appends data to buffer"""
+        if self.size < self.available + len(data):
+            # Expand buffer
+            new_buf = StringIO()
+            new_buf.write(self.read())
+            self.write_fp = self.available = new_buf.tell()
+            read_fp = 0
+            while self.size <= self.available + len(data):
+                self.size = max(self.size, 1024) * 2
+            new_buf.write('0' * (self.size - self.write_fp))
+            self.buf = new_buf
+        else:
+            read_fp = self.buf.tell()
+
+        self.buf.seek(self.write_fp)
+        written = self.size - self.write_fp
+        self.buf.write(data[:written])
+        self.write_fp += len(data)
+        self.available += len(data)
+        if written < len(data):
+            self.write_fp -= self.size
+            self.buf.seek(0)
+            self.buf.write(data[written:])
+        self.buf.seek(read_fp)
+
 async def consume_signaling(pc, signaling):
     global force_exited
     global remote_stdout_connected
     global remote_stin_connected
-    global clientsock
 
     while True:
         try:
@@ -61,16 +111,19 @@ async def run_answer(pc, signaling):
     await signaling.connect()
 
     @pc.on('datachannel')
-    def on_datachannel(channel):
+    def on_datachannel(channel_arg):
         global sctp_transport_established
         start = time.time()
         octets = 0
         sctp_transport_established = True
+        print("datachannel established")
 
-        @channel.on('message')
+        @channel_arg.on('message')
         async def on_message(message):
             nonlocal octets
+            global clientsock
 
+            print("message event fired:" + message)
             if message:
                 octets += len(message)
                 if clientsock != None:
@@ -93,16 +146,20 @@ async def run_answer(pc, signaling):
 def send_data():
     global done_reading
     global sctp_transport_established
+    global rw_buf
 
     sctp_transport_established = True
 
     while (channel.bufferedAmount <= channel.bufferedAmountLowThreshold) and not done_reading and remote_stdout_connected:
-        print("send_data", file=sys.stderr)
-        data = rw_buf.read(1024)
-        #data = rw_buf.getvalue()
-        channel.send(data)
-        if not data:
-              done_reading = True
+        try:
+            data = rw_buf.read(1024)
+            #data = rw_buf.getvalue()
+            print("send_data:" + str(len(data)))
+            channel.send(data)
+            if not data:
+                done_reading = True
+        except Exception as e:
+            print(e)
 
 async def run_offer(pc, signaling):
     global channel
@@ -174,6 +231,8 @@ def work_as_parent():
 def sender_server():
     global rw_buf
 
+    asyncio.set_event_loop(asyncio.new_event_loop())
+
     #if not args.target:
     #    args.target = '0.0.0.0'
     try:
@@ -187,7 +246,7 @@ def sender_server():
     except Exception as e:
         print(e, file=sys.stderr)
 
-    rw_buf = BytesIO()
+    rw_buf = FifoBuffer()
 
     print('Waiting for connections...', file=sys.stderr)
     while True:
@@ -213,9 +272,13 @@ def sender_server():
 
 
                 #print('Received -> %s' % (rcvmsg))
-                if rcvmsg == None or len(rcvmsg) == 0:
-                  break
+                #print("len of recvmsg:" + str(len(recvmsg)))
+                #if rcvmsg == None or len(rcvmsg) == 0:
+                if rcvmsg == None or len(recvmsg) == 0:
+                    print("break")
+                    break
                 else:
+                    print("rw_buf.write(rcvmsg)")
                     rw_buf.write(rcvmsg)
             send_data()
         except Exception as e:
@@ -225,7 +288,7 @@ def sender_server():
 
 def receiver_server():
     global rw_buf
-    global client_sock, client_address
+    global clientsock, client_address
 
     #if not args.target:
     #    args.target = '0.0.0.0'
@@ -233,7 +296,7 @@ def receiver_server():
     server.bind(("127.0.0.1", 10200))
     server.listen()
 
-    rw_buf = BytesIO()
+    rw_buf = FifoBuffer()
     #rw_buf = getInMemoryBufferedRWPair()
 
     print('Waiting for connections...', file=sys.stderr)
@@ -254,7 +317,8 @@ def receiver_server():
         #         else:
         #             clientsock.sendall(rcvmsg)
         except Exception as e:
-             print(e, file=sys.stderr)
+            print(e)
+            #print(e, file=sys.stderr)
 
 def send_keep_alive():
     logging.basicConfig(level=logging.FATAL)
@@ -264,6 +328,7 @@ def send_keep_alive():
 
 def setup_ws_sub_sender():
     global send_ws
+    global sub_channel_sig
     send_ws = websocket.create_connection("ws://" + args.signaling_host + ":" + str(args.signaling_port) + "/")
     print("receiver app level ws opend")
     if args.role == 'send':
@@ -287,8 +352,8 @@ def ws_sub_receiver():
             print("receiver_connected")
             print(rw_buf.getbuffer().nbytes)
             remote_stdout_connected = True
-            if rw_buf.getbuffer().nbytes != 0:
-                send_data()
+            # if rw_buf.getbuffer().nbytes != 0:
+            #     send_data()
         elif "receiver_disconnected" in message:
             remote_stdout_connected = False
             done_reading = False
@@ -305,12 +370,11 @@ def ws_sub_receiver():
         print("### closed ###")
 
     def on_open(ws):
-        global sub_channel_sig
         print("receiver app level ws opend")
         if args.role == 'send':
-            ws_send_wrapper(args.gid + "rtos_chsig:join")
+            ws.send(args.gid + "rtos_chsig:join")
         else:
-            ws_send_wrapper(args.gid + "stor_chsig:join")
+            ws.send(args.gid + "stor_chsig:join")
 
     logging.basicConfig(level=logging.FATAL)
     websocket.enableTrace(True)
@@ -332,8 +396,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     colo = None
-    # if args.verbose:
-    #     logging.basicConfig(level=logging.DEBUG)
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.FATAL)
 
     if args.hierarchy == 'parent':
         colo = work_as_parent()
