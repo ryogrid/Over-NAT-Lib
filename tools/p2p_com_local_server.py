@@ -21,7 +21,7 @@ import traceback
 sctp_transport_established = False
 force_exited = False
 
-channel = None
+#channel_sender = None
 remote_stdout_connected = False
 remote_stdin_connected = False
 fifo_q = queue.Queue()
@@ -31,6 +31,7 @@ client_address = None
 done_reading = False
 send_ws = None
 sub_channel_sig = None
+send_data_prepared = False
 
 # class FifoBuffer(object):
 #     def __init__(self):
@@ -111,19 +112,19 @@ async def run_answer(pc, signaling):
     await signaling.connect()
 
     @pc.on('datachannel')
-    def on_datachannel(channel_arg):
+    def on_datachannel(channel):
         global sctp_transport_established
         start = time.time()
         octets = 0
         sctp_transport_established = True
         print("datachannel established")
 
-        @channel_arg.on('message')
+        @channel.on('message')
         async def on_message(message):
             nonlocal octets
             global clientsock
 
-            print("message event fired:" + message)
+            print("message event fired")
             if message:
                 octets += len(message)
                 if clientsock != None:
@@ -143,34 +144,12 @@ async def run_answer(pc, signaling):
     await signaling.send("join")
     await consume_signaling(pc, signaling)
 
-def send_data():
-    global done_reading
-    global sctp_transport_established
-    global fifo_q
-
-    sctp_transport_established = True
-
-    while (channel.bufferedAmount <= channel.bufferedAmountLowThreshold) and not done_reading and remote_stdout_connected:
-        try:
-            if not fifo_q.empty():
-                data = fifo_q.get()
-                #data = fifo_q.getvalue()
-                print("send_data:" + str(len(data)))
-                channel.send(data)
-                if not data:
-                    done_reading = True
-            else:
-                done_reading = True
-        except Exception as e:
-            print(e)
-
 async def run_offer(pc, signaling):
-    global channel
-
     while True:
         try:
             await signaling.connect()
             await signaling.send("joined_members")
+
             cur_num_str = await signaling.receive()
             #print("cur_num_str: " + cur_num_str, file=sys.stderr)
             if "ignoalable error" in cur_num_str:
@@ -187,10 +166,34 @@ async def run_offer(pc, signaling):
     await signaling.send("join")
 
     #done_reading = False
-    channel = pc.createDataChannel('filexfer')
+    channel_sender = pc.createDataChannel('filexfer')
 
-    channel.on('bufferedamountlow', send_data)
-    channel.on('open', send_data)
+    def send_data():
+        nonlocal channel_sender
+        global done_reading
+        global sctp_transport_established
+        global fifo_q
+
+        sctp_transport_established = True
+        while send_data_prepared == False:
+            time.sleep(1)
+
+        while (channel_sender.bufferedAmount <= channel_sender.bufferedAmountLowThreshold) and not done_reading and remote_stdout_connected:
+            try:
+                if not fifo_q.empty():
+                    data = fifo_q.get()
+                    # data = fifo_q.getvalue()
+                    print("send_data:" + str(len(data)))
+                    channel_sender.send(data)
+                    if not data:
+                        done_reading = True
+                else:
+                    done_reading = True
+            except Exception as e:
+                print(e)
+
+    channel_sender.on('bufferedamountlow', send_data)
+    channel_sender.on('open', send_data)
 
     # send offer
     await pc.setLocalDescription(await pc.createOffer())
@@ -233,6 +236,7 @@ def work_as_parent():
 
 def sender_server():
     global fifo_q
+    global send_data_prepared
 
     asyncio.set_event_loop(asyncio.new_event_loop())
 
@@ -281,7 +285,8 @@ def sender_server():
                 else:
                     print("fifo_q.write(rcvmsg)")
                     fifo_q.put(rcvmsg)
-            send_data()
+            send_data_prepared = True
+            #send_data()
         except:
             traceback.print_exc()
             # except Exception as e:
