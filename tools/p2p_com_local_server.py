@@ -28,6 +28,7 @@ clientsock = None
 client_address = None
 done_reading = False
 send_ws = None
+sub_channel_sig = None
 
 async def consume_signaling(pc, signaling):
     global force_exited
@@ -139,6 +140,7 @@ async def run_offer(pc, signaling):
 
 def ice_establishment_state():
     global force_exited
+    logging.basicConfig(level=logging.FATAL)
     while(sctp_transport_established == False and "failed" not in pc.iceConnectionState):
         #print("ice_establishment_state: " + pc.iceConnectionState)
         time.sleep(1)
@@ -157,6 +159,14 @@ def ice_establishment_state():
 #     read_buf = bytearray(buf_size)
 #     write_buf = bytearray(buf_size)
 #     return BufferedRWPair(BufferedReader(BytesIO(read_buf), buf_size), BufferedWriter(BytesIO(write_buf)), buf_size)
+
+# app level websocket sending should anytime use this (except join message)
+def ws_send_wrapper(msg):
+    # if args.role == 'send':
+    #     send_ws.send(args.gid + "stor" + "_chsig:" + msg)
+    # else:
+    #     send_ws.send(args.gid + "rtos" + "_chsig:" + msg)
+    send_ws.send(sub_channel_sig + "_chsig:" + msg)
 
 def work_as_parent():
     pass
@@ -223,14 +233,15 @@ def receiver_server():
     server.bind(("127.0.0.1", 10200))
     server.listen()
 
+    rw_buf = BytesIO()
     #rw_buf = getInMemoryBufferedRWPair()
 
     print('Waiting for connections...', file=sys.stderr)
     while True:
         try:
             clientsock, client_address = server.accept()
-            print("new client connected.")
-
+            print("new client connected.", file=sys.stderr)
+            ws_send_wrapper("receiver_connected")
         #     while True:
         #         try:
         #             rcvmsg = rw_buf.read(1024)
@@ -245,20 +256,20 @@ def receiver_server():
         except Exception as e:
              print(e, file=sys.stderr)
 
-def ws_send_wrapper(msg):
-    if args.role == 'send':
-        send_ws.send(args.gid + "stor" + "_chsig:" + msg)
-    else:
-        send_ws.send(args.gid + "rtos" + "_chsig:" + msg)
-
 def send_keep_alive():
+    logging.basicConfig(level=logging.FATAL)
     while True:
-        ws_send_wrapper(send_ws, "keepalive")
+        ws_send_wrapper("keepalive")
         time.sleep(5)
 
 def setup_ws_sub_sender():
     global send_ws
-    send_ws = websocket.create_connection("ws://" + args.signalng_host + ":" + str(args.signaling_port) + "/")
+    send_ws = websocket.create_connection("ws://" + args.signaling_host + ":" + str(args.signaling_port) + "/")
+    print("receiver app level ws opend")
+    if args.role == 'send':
+        sub_channel_sig = args.gid + "stor"
+    else:
+        sub_channel_sig = args.gid + "rtos"
     ws_send_wrapper("join")
 
     ws_keep_alive_th = threading.Thread(target=send_keep_alive)
@@ -273,6 +284,8 @@ def ws_sub_receiver():
         print(message,  file=sys.stderr)
 
         if "receiver_connected" in message:
+            print("receiver_connected")
+            print(rw_buf.getbuffer().nbytes)
             remote_stdout_connected = True
             if rw_buf.getbuffer().nbytes != 0:
                 send_data()
@@ -292,14 +305,16 @@ def ws_sub_receiver():
         print("### closed ###")
 
     def on_open(ws):
+        global sub_channel_sig
         print("receiver app level ws opend")
         if args.role == 'send':
-            ws.send(args.gid + "stor" + "_chsig:join")
+            ws_send_wrapper(args.gid + "rtos_chsig:join")
         else:
-            ws.send(args.gid + "rtos" + "_chsig:join")
+            ws_send_wrapper(args.gid + "stor_chsig:join")
 
+    logging.basicConfig(level=logging.FATAL)
     websocket.enableTrace(True)
-    ws = websocket.WebSocketApp("ws://" + args.signalng_host + ":" + str(args.signaling_port) + "/",
+    ws = websocket.WebSocketApp("ws://" + args.signaling_host + ":" + str(args.signaling_port) + "/",
                                     on_message=on_message,
                                     on_error=on_error,
                                     on_close=on_close)
@@ -317,8 +332,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     colo = None
-    if args.verbose:
-        logging.basicConfig(level=logging.DEBUG)
+    # if args.verbose:
+    #     logging.basicConfig(level=logging.DEBUG)
 
     if args.hierarchy == 'parent':
         colo = work_as_parent()
