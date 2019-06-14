@@ -7,16 +7,16 @@ import socket
 import sys
 import threading
 import time
-from io import BufferedRWPair, BufferedWriter, BufferedReader, BytesIO, StringIO
+import queue
+#from io import BytesIO
 
 from aiortcdc import RTCPeerConnection, RTCSessionDescription
 
 from signaling_share_ws import add_signaling_arguments, create_signaling
 
-from StringIO import StringIO
-
 # application level ws communication
 import websocket
+import traceback
 
 sctp_transport_established = False
 force_exited = False
@@ -24,7 +24,7 @@ force_exited = False
 channel = None
 remote_stdout_connected = False
 remote_stdin_connected = False
-rw_buf = None
+fifo_q = queue.Queue()
 signaling = None
 clientsock = None
 client_address = None
@@ -32,54 +32,54 @@ done_reading = False
 send_ws = None
 sub_channel_sig = None
 
-class FifoBuffer(object):
-    def __init__(self):
-        self.buf = StringIO()
-        self.available = 0    # Bytes available for reading
-        self.size = 0
-        self.write_fp = 0
-
-    def read(self, size = None):
-        """Reads size bytes from buffer"""
-        if size is None or size > self.available:
-            size = self.available
-        size = max(size, 0)
-
-        result = self.buf.read(size)
-        self.available -= size
-
-        if len(result) < size:
-            self.buf.seek(0)
-            result += self.buf.read(size - len(result))
-
-        return result
-
-
-    def write(self, data):
-        """Appends data to buffer"""
-        if self.size < self.available + len(data):
-            # Expand buffer
-            new_buf = StringIO()
-            new_buf.write(self.read())
-            self.write_fp = self.available = new_buf.tell()
-            read_fp = 0
-            while self.size <= self.available + len(data):
-                self.size = max(self.size, 1024) * 2
-            new_buf.write('0' * (self.size - self.write_fp))
-            self.buf = new_buf
-        else:
-            read_fp = self.buf.tell()
-
-        self.buf.seek(self.write_fp)
-        written = self.size - self.write_fp
-        self.buf.write(data[:written])
-        self.write_fp += len(data)
-        self.available += len(data)
-        if written < len(data):
-            self.write_fp -= self.size
-            self.buf.seek(0)
-            self.buf.write(data[written:])
-        self.buf.seek(read_fp)
+# class FifoBuffer(object):
+#     def __init__(self):
+#         self.buf = BytesIO()
+#         self.available = 0    # Bytes available for reading
+#         self.size = 0
+#         self.write_fp = 0
+#
+#     def read(self, size = None):
+#         """Reads size bytes from buffer"""
+#         if size is None or size > self.available:
+#             size = self.available
+#         size = max(size, 0)
+#
+#         result = self.buf.read(size)
+#         self.available -= size
+#
+#         if len(result) < size:
+#             self.buf.seek(0)
+#             result += self.buf.read(size - len(result))
+#
+#         return result
+#
+#
+#     def write(self, data):
+#         """Appends data to buffer"""
+#         if self.size < self.available + len(data):
+#             # Expand buffer
+#             new_buf = BytesIO()
+#             new_buf.write(self.read())
+#             self.write_fp = self.available = new_buf.tell()
+#             read_fp = 0
+#             while self.size <= self.available + len(data):
+#                 self.size = max(self.size, 1024) * 2
+#             new_buf.write('0' * (self.size - self.write_fp))
+#             self.buf = new_buf
+#         else:
+#             read_fp = self.buf.tell()
+#
+#         self.buf.seek(self.write_fp)
+#         written = self.size - self.write_fp
+#         self.buf.write(data[:written])
+#         self.write_fp += len(data)
+#         self.available += len(data)
+#         if written < len(data):
+#             self.write_fp -= self.size
+#             self.buf.seek(0)
+#             self.buf.write(data[written:])
+#         self.buf.seek(read_fp)
 
 async def consume_signaling(pc, signaling):
     global force_exited
@@ -146,17 +146,20 @@ async def run_answer(pc, signaling):
 def send_data():
     global done_reading
     global sctp_transport_established
-    global rw_buf
+    global fifo_q
 
     sctp_transport_established = True
 
     while (channel.bufferedAmount <= channel.bufferedAmountLowThreshold) and not done_reading and remote_stdout_connected:
         try:
-            data = rw_buf.read(1024)
-            #data = rw_buf.getvalue()
-            print("send_data:" + str(len(data)))
-            channel.send(data)
-            if not data:
+            if not fifo_q.empty():
+                data = fifo_q.get()
+                #data = fifo_q.getvalue()
+                print("send_data:" + str(len(data)))
+                channel.send(data)
+                if not data:
+                    done_reading = True
+            else:
                 done_reading = True
         except Exception as e:
             print(e)
@@ -229,7 +232,7 @@ def work_as_parent():
     pass
 
 def sender_server():
-    global rw_buf
+    global fifo_q
 
     asyncio.set_event_loop(asyncio.new_event_loop())
 
@@ -246,8 +249,6 @@ def sender_server():
     except Exception as e:
         print(e, file=sys.stderr)
 
-    rw_buf = FifoBuffer()
-
     print('Waiting for connections...', file=sys.stderr)
     while True:
         try:
@@ -260,7 +261,7 @@ def sender_server():
                 time.sleep(1)
 
             while True:
-                recvmsg = None
+                rcvmsg = None
                 try:
                     rcvmsg = clientsock.recv(1024)
                     print("received message from client")
@@ -274,20 +275,22 @@ def sender_server():
                 #print('Received -> %s' % (rcvmsg))
                 #print("len of recvmsg:" + str(len(recvmsg)))
                 #if rcvmsg == None or len(rcvmsg) == 0:
-                if rcvmsg == None or len(recvmsg) == 0:
+                if rcvmsg == None or len(rcvmsg) == 0:
                     print("break")
                     break
                 else:
-                    print("rw_buf.write(rcvmsg)")
-                    rw_buf.write(rcvmsg)
+                    print("fifo_q.write(rcvmsg)")
+                    fifo_q.put(rcvmsg)
             send_data()
-        except Exception as e:
-            print(e, file=sys.stderr)
+        except:
+            traceback.print_exc()
+            # except Exception as e:
+        #     print(e, file=sys.stderr)
 
     clientsock.close()
 
 def receiver_server():
-    global rw_buf
+    global fifo_q
     global clientsock, client_address
 
     #if not args.target:
@@ -295,9 +298,6 @@ def receiver_server():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(("127.0.0.1", 10200))
     server.listen()
-
-    rw_buf = FifoBuffer()
-    #rw_buf = getInMemoryBufferedRWPair()
 
     print('Waiting for connections...', file=sys.stderr)
     while True:
@@ -307,7 +307,7 @@ def receiver_server():
             ws_send_wrapper("receiver_connected")
         #     while True:
         #         try:
-        #             rcvmsg = rw_buf.read(1024)
+        #             rcvmsg = fifo_q.read(1024)
         #         except Exception as e:
         #             print(e,  file=sys.stderr)
         #
@@ -350,9 +350,9 @@ def ws_sub_receiver():
 
         if "receiver_connected" in message:
             print("receiver_connected")
-            print(rw_buf.getbuffer().nbytes)
+            #print(fifo_q.getbuffer().nbytes)
             remote_stdout_connected = True
-            # if rw_buf.getbuffer().nbytes != 0:
+            # if fifo_q.getbuffer().nbytes != 0:
             #     send_data()
         elif "receiver_disconnected" in message:
             remote_stdout_connected = False
