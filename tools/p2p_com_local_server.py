@@ -147,19 +147,6 @@ async def run_offer(pc, signaling):
             print("start sending roop")
             while channel_sender.bufferedAmount <= channel_sender.bufferedAmountLowThreshold:
                 try:
-                    # if not fifo_q.empty():
-                    #     data = fifo_q.get()
-                    #     # data = fifo_q.getvalue()
-                    #     print("send_data:" + str(len(data)))
-                    #     channel_sender.send(data)
-                    #     # if not data:
-                    #     #     done_reading = True
-                    # else:
-                    #     done_reading = True
-                    #     # notify sending finish
-                    #     #channel_sender.send(bytearray())
-                    #     channel_sender.send(bytes("", encoding="utf-8"))
-
                     data = None
                     try:
                         print("try get data from queue")
