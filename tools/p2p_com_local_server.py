@@ -28,10 +28,8 @@ fifo_q = queue.Queue()
 signaling = None
 clientsock = None
 client_address = None
-done_reading = False
 send_ws = None
 sub_channel_sig = None
-send_data_prepared = False
 
 async def consume_signaling(pc, signaling):
     global force_exited
@@ -55,8 +53,8 @@ async def consume_signaling(pc, signaling):
             else:
                 print('Exiting', file=sys.stderr)
                 break
-        except Exception as e:
-            print(e, file=sys.stderr)
+        except:
+            traceback.print_exc()
 
 
 async def run_answer(pc, signaling):
@@ -75,20 +73,25 @@ async def run_answer(pc, signaling):
             nonlocal octets
             global clientsock
 
-            print("message event fired")
-            if len(message) > 0:
-                octets += len(message)
-                if clientsock != None:
-                    clientsock.sendall(message)
-            else:
-                elapsed = time.time() - start
-                if elapsed == 0:
-                    elapsed = 0.001
-                print('received %d bytes in %.1f s (%.3f Mbps)' % (
-                    octets, elapsed, octets * 8 / elapsed / 1000000), file=sys.stderr)
-                if clientsock != None:
+            try:
+                print("message event fired")
+                if len(message) > 0:
+                    octets += len(message)
+                    if clientsock != None:
+                        clientsock.sendall(message)
+                else:
+                    elapsed = time.time() - start
+                    if elapsed == 0:
+                        elapsed = 0.001
+                    print('received %d bytes in %.1f s (%.3f Mbps)' % (
+                        octets, elapsed, octets * 8 / elapsed / 1000000), file=sys.stderr)
+                    if clientsock != None:
+                        clientsock.close()
+            except:
+                traceback.print_exc()
+                if clientsock:
                     clientsock.close()
-
+                ws_send_wrapper("receiver_disconnected")
                 # say goodbye
                 #await signaling.send(None)
 
@@ -111,40 +114,60 @@ async def run_offer(pc, signaling):
 
             #print("wait join of receiver", file=sys.stderr)
             await asyncio.sleep(1)
-        except Exception as e:
-            print(e, file=sys.stderr)
+        except:
+            traceback.print_exc()
     await signaling.connect()
     await signaling.send("join")
 
-    #done_reading = False
     channel_sender = pc.createDataChannel('filexfer')
 
     def send_data():
         nonlocal channel_sender
-        global done_reading
         global sctp_transport_established
         global fifo_q
+        global remote_stdout_connected
+        global clientsock
 
-        sctp_transport_established = True
-        while send_data_prepared == False:
-            time.sleep(1)
+        while True:
+            sctp_transport_established = True
+            while remote_stdout_connected == False:
+                time.sleep(1)
 
-        while (channel_sender.bufferedAmount <= channel_sender.bufferedAmountLowThreshold) and not done_reading and remote_stdout_connected:
-            try:
-                if not fifo_q.empty():
-                    data = fifo_q.get()
-                    # data = fifo_q.getvalue()
-                    print("send_data:" + str(len(data)))
-                    channel_sender.send(data)
-                    # if not data:
+            while channel_sender.bufferedAmount > channel_sender.bufferedAmountLowThreshold:
+                time.sleep(0.1) # 100ms
+
+            while channel_sender.bufferedAmount <= channel_sender.bufferedAmountLowThreshold:
+                try:
+                    # if not fifo_q.empty():
+                    #     data = fifo_q.get()
+                    #     # data = fifo_q.getvalue()
+                    #     print("send_data:" + str(len(data)))
+                    #     channel_sender.send(data)
+                    #     # if not data:
+                    #     #     done_reading = True
+                    # else:
                     #     done_reading = True
-                else:
-                    done_reading = True
-                    # notify sending finish
-                    #channel_sender.send(bytearray())
-                    channel_sender.send(bytes("", encoding="utf-8"))
-            except Exception as e:
-                print(e)
+                    #     # notify sending finish
+                    #     #channel_sender.send(bytearray())
+                    #     channel_sender.send(bytes("", encoding="utf-8"))
+
+                    data = None
+                    try:
+                        data = fifo_q.get(block=True, timeout=5)
+                    except queue.Empty:
+                        pass
+
+                    # data = fifo_q.getvalue()
+                    if data:
+                        print("send_data:" + str(len(data)))
+                        channel_sender.send(data)
+
+                    if clientsock == None:
+                        channel_sender.send(bytes("", encoding="utf-8"))
+                        remote_stdout_connected = False
+                        break
+                except:
+                    traceback.print_exc()
 
     channel_sender.on('bufferedamountlow', send_data)
     channel_sender.on('open', send_data)
@@ -157,7 +180,6 @@ async def run_offer(pc, signaling):
 
 def ice_establishment_state():
     global force_exited
-    logging.basicConfig(level=logging.FATAL)
     while(sctp_transport_established == False and "failed" not in pc.iceConnectionState):
         #print("ice_establishment_state: " + pc.iceConnectionState)
         time.sleep(1)
@@ -180,7 +202,7 @@ def work_as_parent():
 
 def sender_server():
     global fifo_q
-    global send_data_prepared
+    global clientsock
 
     asyncio.set_event_loop(asyncio.new_event_loop())
 
@@ -190,8 +212,8 @@ def sender_server():
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server.bind(("127.0.0.1", 10100))
         server.listen()
-    except Exception as e:
-        print(e, file=sys.stderr)
+    except:
+        traceback.print_exc()
 
     print('Waiting for connections...', file=sys.stderr)
     while True:
@@ -207,14 +229,16 @@ def sender_server():
             while True:
                 rcvmsg = None
                 try:
-                    rcvmsg = clientsock.recv(256)
+                    rcvmsg = clientsock.recv(2048)
                     print("received message from client")
                     print(len(rcvmsg))
-                except Exception as e:
-                    print(e,  file=sys.stderr)
+                except:
+                    traceback.print_exc()
                     print("maybe client disconnect")
-                    signaling.send("sender_disconnected")
-
+                    if clientsock:
+                        clientsock.close()
+                        clientsock = None
+                    ws_send_wrapper("sender_disconnected")
 
                 #print("len of recvmsg:" + str(len(recvmsg)))
                 if rcvmsg == None or len(rcvmsg) == 0:
@@ -223,14 +247,14 @@ def sender_server():
                 else:
                     print("fifo_q.write(rcvmsg)")
                     fifo_q.put(rcvmsg)
-                    send_data_prepared = True
             #send_data()
         except:
             traceback.print_exc()
+            if clientsock:
+                clientsock.close()
+                clientsock = None
             # except Exception as e:
         #     print(e, file=sys.stderr)
-
-    clientsock.close()
 
 def receiver_server():
     global fifo_q
@@ -259,8 +283,9 @@ def receiver_server():
         #           break
         #         else:
         #             clientsock.sendall(rcvmsg)
-        except Exception as e:
-            print(e)
+        except:
+            traceback.print_exc()
+            ws_send_wrapper("receiver_disconnected")
             #print(e, file=sys.stderr)
 
 def send_keep_alive():
@@ -288,6 +313,7 @@ def ws_sub_receiver():
         global remote_stdout_connected
         global remote_stdin_connected
         global done_reading
+        global clientsock
 
         print(message,  file=sys.stderr)
 
@@ -304,7 +330,9 @@ def ws_sub_receiver():
             remote_stdin_connected = True
         elif "sender_disconnected" in message:
             remote_stdin_connected = False
-            clientsock.close()
+            if clientsock:
+                clientsock.close()
+                clientsock = None
 
     def on_error(ws, error):
         print(error)
@@ -372,11 +400,11 @@ if __name__ == '__main__':
         loop = asyncio.get_event_loop()
         try:
             loop.run_until_complete(coro)
-        except KeyboardInterrupt:
-            pass
+        except:
+            traceback.print_exc()
         finally:
             #fp.close()
             loop.run_until_complete(pc.close())
             loop.run_until_complete(signaling.close())
     except:
-        pass
+        traceback.print_exc()
