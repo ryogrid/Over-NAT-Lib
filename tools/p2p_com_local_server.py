@@ -270,7 +270,6 @@ def sender_server():
                 #print("len of recvmsg:" + str(len(recvmsg)))
                 if rcvmsg == None or len(rcvmsg) == 0:
                     print("break")
-                    #fifo_q.put(bytes("", encoding="utf-8"))
                     fifo_q.put("finished")
                     break
                 else:
