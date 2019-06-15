@@ -170,9 +170,10 @@ async def run_offer(pc, signaling):
 
                     # data = fifo_q.getvalue()
                     if data:
-                        if data == bytes("", encoding="utf-8"):
+                        if type(data) is "str" and data == "finished":
                             print("notify end of transfer")
-                            channel_sender.send(data)
+                            #channel_sender.send(data)
+                            ws_sender_send_wrapper("sender_disconnected")
                         else:
                             print("send_data:" + str(len(data)))
                             channel_sender.send(data)
@@ -269,7 +270,8 @@ def sender_server():
                 #print("len of recvmsg:" + str(len(recvmsg)))
                 if rcvmsg == None or len(rcvmsg) == 0:
                     print("break")
-                    fifo_q.put(bytes("", encoding="utf-8"))
+                    #fifo_q.put(bytes("", encoding="utf-8"))
+                    fifo_q.put("finished")
                     break
                 else:
                     print("fifo_q.write(rcvmsg)")
@@ -414,8 +416,11 @@ def ws_sub_receiver():
         elif "sender_connected" in message:
             remote_stdin_connected = True
         elif "sender_disconnected" in message:
+            print("sender_disconnected")
             remote_stdin_connected = False
             if clientsock:
+                time.sleep(5)
+                print("disconnect clientsock")
                 clientsock.close()
                 clientsock = None
         # elif "member_count" in message: # respons of joined_members_sub
