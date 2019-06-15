@@ -275,7 +275,7 @@ def receiver_server():
             print("new client connected.", file=sys.stderr)
             # wait until remote node join to my send room
             while is_remote_node_exists_on_my_send_room == False:
-                ws_send_wrapper("joined_members")
+                ws_send_wrapper("joined_members_sub")
                 time.sleep(3)
             ws_send_wrapper("receiver_connected")
         #     while True:
@@ -342,22 +342,27 @@ def ws_sub_receiver():
             if clientsock:
                 clientsock.close()
                 clientsock = None
-        else:
-            json_obj = None
-            try:
-                json_obj = json.loads(message)
-            except:
-                traceback.print_exc()
-                print("josn parse failed. return.")
-                return
+        elif "member_count" in message: # respons of joined_members_sub
+            splited = message.split(":")
+            member_num = int(splited[1])
+            if member_num >= 2:
+                is_remote_node_exists_on_my_send_room = True
 
-            print("json parsed")
-            print(json_obj)
-            if "members" in json_obj:
-                member_count = json_obj['members']
-                print(member_count)
-                if member_count >= 2:
-                    is_remote_node_exists_on_my_send_room = True
+            # json_obj = None
+            # try:
+            #     json_obj = json.loads(message)
+            # except:
+            #     traceback.print_exc()
+            #     print("josn parse failed. return.")
+            #     return
+            #
+            # print("json parsed")
+            # print(json_obj)
+            # if "members" in json_obj:
+            #     member_count = json_obj['members']
+            #     print(member_count)
+            #     if member_count >= 2:
+            #         is_remote_node_exists_on_my_send_room = True
 
     def on_error(ws, error):
         print(error)
