@@ -93,7 +93,7 @@ async def run_answer(pc, signaling):
                 traceback.print_exc()
                 if clientsock:
                     clientsock.close()
-                ws_send_wrapper("receiver_disconnected")
+                ws_sender_send_wrapper("receiver_disconnected")
                 # say goodbye
                 #await signaling.send(None)
 
@@ -196,8 +196,12 @@ def ice_establishment_state():
         print("exit.")
 
 # app level websocket sending should anytime use this (except join message)
-def ws_send_wrapper(msg):
+def ws_sender_send_wrapper(msg):
     send_ws.send(sub_channel_sig + "_chsig:" + msg)
+
+# app level websocket sending should anytime use this
+def ws_sender_recv_wrapper():
+    return send_ws.recv()
 
 def work_as_parent():
     pass
@@ -240,7 +244,7 @@ def sender_server():
                     if clientsock:
                         clientsock.close()
                         clientsock = None
-                    ws_send_wrapper("sender_disconnected")
+                    ws_sender_send_wrapper("sender_disconnected")
 
                 #print("len of recvmsg:" + str(len(recvmsg)))
                 if rcvmsg == None or len(rcvmsg) == 0:
@@ -261,6 +265,7 @@ def sender_server():
 def receiver_server():
     global fifo_q
     global clientsock, client_address
+    global is_remote_node_exists_on_my_send_room
 
     #if not args.target:
     #    args.target = '0.0.0.0'
@@ -275,9 +280,14 @@ def receiver_server():
             print("new client connected.", file=sys.stderr)
             # wait until remote node join to my send room
             while is_remote_node_exists_on_my_send_room == False:
-                ws_send_wrapper("joined_members_sub")
+                ws_sender_send_wrapper("joined_members_sub")
+                message = ws_sender_recv_wrapper()
+                splited = message.split(":")
+                member_num = int(splited[1])
+                if member_num >= 2:
+                    is_remote_node_exists_on_my_send_room = True
                 time.sleep(3)
-            ws_send_wrapper("receiver_connected")
+            ws_sender_send_wrapper("receiver_connected")
         #     while True:
         #         try:
         #             rcvmsg = fifo_q.read(1024)
@@ -291,13 +301,13 @@ def receiver_server():
         #             clientsock.sendall(rcvmsg)
         except:
             traceback.print_exc()
-            ws_send_wrapper("receiver_disconnected")
+            ws_sender_send_wrapper("receiver_disconnected")
             #print(e, file=sys.stderr)
 
 def send_keep_alive():
-    logging.basicConfig(level=logging.FATAL)
+    #logging.basicConfig(level=logging.FATAL)
     while True:
-        ws_send_wrapper("keepalive")
+        ws_sender_send_wrapper("keepalive")
         time.sleep(5)
 
 def setup_ws_sub_sender():
@@ -309,10 +319,54 @@ def setup_ws_sub_sender():
         sub_channel_sig = args.gid + "stor"
     else:
         sub_channel_sig = args.gid + "rtos"
-    ws_send_wrapper("join")
+    ws_sender_send_wrapper("join")
 
     ws_keep_alive_th = threading.Thread(target=send_keep_alive)
     ws_keep_alive_th.start()
+
+# def ws_sub_receiver():
+#     global remote_stdout_connected
+#     global remote_stdin_connected
+#     global done_reading
+#     global clientsock
+#     global is_remote_node_exists_on_my_send_room
+#
+#     ws = websocket.create_connection("ws://" + args.signaling_host + ":" + str(args.signaling_port) + "/")
+#     print("receiver app level ws opend")
+#     try:
+#         if args.role == 'send':
+#             ws.send(args.gid + "rtos_chsig:join")
+#         else:
+#             ws.send(args.gid + "stor_chsig:join")
+#     except:
+#         traceback.print_exc()
+#
+#     while True:
+#         message = ws.recv()
+#         print("recieved message as ws_sub_receiver")
+#         print(message)
+#
+#         if "receiver_connected" in message:
+#             print("receiver_connected")
+#             #print(fifo_q.getbuffer().nbytes)
+#             remote_stdout_connected = True
+#             # if fifo_q.getbuffer().nbytes != 0:
+#             #     send_data()
+#         elif "receiver_disconnected" in message:
+#             remote_stdout_connected = False
+#             done_reading = False
+#         elif "sender_connected" in message:
+#             remote_stdin_connected = True
+#         elif "sender_disconnected" in message:
+#             remote_stdin_connected = False
+#             if clientsock:
+#                 clientsock.close()
+#                 clientsock = None
+#         elif "member_count" in message: # respons of joined_members_sub
+#             splited = message.split(":")
+#             member_num = int(splited[1])
+#             if member_num >= 2:
+#                 is_remote_node_exists_on_my_send_room = True
 
 def ws_sub_receiver():
     def on_message(ws, message):
@@ -342,27 +396,11 @@ def ws_sub_receiver():
             if clientsock:
                 clientsock.close()
                 clientsock = None
-        elif "member_count" in message: # respons of joined_members_sub
-            splited = message.split(":")
-            member_num = int(splited[1])
-            if member_num >= 2:
-                is_remote_node_exists_on_my_send_room = True
-
-            # json_obj = None
-            # try:
-            #     json_obj = json.loads(message)
-            # except:
-            #     traceback.print_exc()
-            #     print("josn parse failed. return.")
-            #     return
-            #
-            # print("json parsed")
-            # print(json_obj)
-            # if "members" in json_obj:
-            #     member_count = json_obj['members']
-            #     print(member_count)
-            #     if member_count >= 2:
-            #         is_remote_node_exists_on_my_send_room = True
+        # elif "member_count" in message: # respons of joined_members_sub
+        #     splited = message.split(":")
+        #     member_num = int(splited[1])
+        #     if member_num >= 2:
+        #         is_remote_node_exists_on_my_send_room = True
 
     def on_error(ws, error):
         print(error)
