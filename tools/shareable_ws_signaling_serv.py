@@ -84,7 +84,8 @@ def accept_and_later_msg_handle(environ, start_response):
 
         signaling_msg = ':'.join(splited_msg[1:])
 
-        if "joined_members_sub" in signaling_msg:  # for websocket of asyncio
+        # though already joined, handle this message
+        if "joined_members_sub" in signaling_msg:
             resp_msg = None
             if channel_signiture in channel_dict:
                 resp_msg = str(len(channel_dict[channel_signiture].users))
@@ -94,6 +95,7 @@ def accept_and_later_msg_handle(environ, start_response):
             # ws.send("{ \"members\":" + resp_msg + "}")
             print("send response of joined_message: " + "member_count:" + resp_msg )
             ws.send("member_count:" + resp_msg)
+            continue
 
         # new connection (first recieved message)
         if ws not in ws_list:
