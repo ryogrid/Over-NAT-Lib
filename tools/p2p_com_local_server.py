@@ -34,7 +34,8 @@ send_ws = None
 sub_channel_sig = None
 is_remote_node_exists_on_my_send_room = False
 
-server = None
+server_send = None
+server_rcv = None
 
 async def consume_signaling(pc, signaling):
     global force_exited
@@ -155,10 +156,10 @@ async def run_offer(pc, signaling):
                     data = None
                     try:
                         print("try get data from queue")
-                        data = await sender_fifo_q.get(block=True, timeout=5)
-                        print("got get data from queue")
-                    except queue.Empty:
-                        pass
+                        data = await sender_fifo_q.get()
+                        print("got data from queue")
+                    except:
+                        traceback.print_exc()
 
                     # data = fifo_q.getvalue()
                     if data:
@@ -175,7 +176,7 @@ async def run_offer(pc, signaling):
                     #     remote_stdout_connected = False
                     #     break
 
-                    await asyncio.sleep(0.01)
+                    await asyncio.sleep(0.1)
                 except:
                     traceback.print_exc()
 
@@ -210,11 +211,15 @@ async def ice_establishment_state():
 
 # app level websocket sending should anytime use this (except join message)
 def ws_sender_send_wrapper(msg):
-    send_ws.send(sub_channel_sig + "_chsig:" + msg)
+    if send_ws:
+        send_ws.send(sub_channel_sig + "_chsig:" + msg)
 
 # app level websocket sending should anytime use this
 def ws_sender_recv_wrapper():
-    return send_ws.recv()
+    if send_ws:
+        return send_ws.recv()
+    else:
+        return None
 
 def work_as_parent():
     pass
@@ -236,7 +241,7 @@ async def sender_server_handler(reader, writer):
         while True:
             rcvmsg = None
             try:
-                rcvmsg = reader.read(2048)
+                rcvmsg = await reader.read(2048)
                 print("received message from client")
                 print(len(rcvmsg))
             except:
@@ -250,12 +255,12 @@ async def sender_server_handler(reader, writer):
             #print("len of recvmsg:" + str(len(recvmsg)))
             if rcvmsg == None or len(rcvmsg) == 0:
                 print("break")
-                sender_fifo_q.put("finished")
+                await sender_fifo_q.put("finished")
                 break
             else:
                 print("fifo_q.write(rcvmsg)")
-                sender_fifo_q.put(rcvmsg)
-            await asyncio.sleep(0.01)
+                await sender_fifo_q.put(rcvmsg)
+            await asyncio.sleep(0.1)
         #send_data()
     except:
         traceback.print_exc()
@@ -279,7 +284,7 @@ async def sender_server():
     #     traceback.print_exc()
 
     try:
-        server = await asyncio.start_server(
+        server_send = await asyncio.start_server(
             sender_server_handler, '127.0.0.1', 10100)
     except:
         traceback.print_exc()
@@ -318,7 +323,7 @@ async def receiver_server_handler(reader, writer):
             data = None
             try:
                 print("try get data from queue")
-                data = await receiver_fifo_q.get(block=True, timeout=5)
+                data = await receiver_fifo_q.get()
                 print("got get data from queue")
             except queue.Empty:
                 pass
@@ -333,6 +338,7 @@ async def receiver_server_handler(reader, writer):
                     print("send_data:" + str(len(data)))
                     writer.write(data)
                     await writer.drain()
+            await asyncio.sleep(0.01)
         except:
             traceback.print_exc()
             ws_sender_send_wrapper("receiver_disconnected")
@@ -341,7 +347,7 @@ async def receiver_server():
     global server_rcv
     try:
         server_rcv = await asyncio.start_server(
-            receiver_server_handler, '127.0.0.1', 10100)
+            receiver_server_handler, '127.0.0.1', 10200)
     except:
         traceback.print_exc()
 
@@ -434,9 +440,9 @@ async def parallel_by_gather():
 
     cors = None
     if args.role == 'send':
-        cors = [run_offer(pc, signaling), sender_server(), receiver_server(), ice_establishment_state(), send_keep_alive()]
+        cors = [run_offer(pc, signaling), sender_server(), ice_establishment_state(), send_keep_alive()]
     else:
-        cors = [run_answer(pc, signaling), sender_server(), receiver_server(), ice_establishment_state(), send_keep_alive()]
+        cors = [run_answer(pc, signaling), receiver_server(), ice_establishment_state(), send_keep_alive()]
     await asyncio.gather(*cors)
     return
 
@@ -461,14 +467,20 @@ if __name__ == '__main__':
         signaling = create_signaling(args)
         pc = RTCPeerConnection()
 
-        # ice_state_loop = asyncio.new_event_loop()
+
         #
         # ice_state_th = threading.Thread(target=ice_establishment_state)
         # ice_state_th.start()
         #
-        # setup_ws_sub_sender()
-        # ws_sub_recv_th = threading.Thread(target=ws_sub_receiver)
-        # ws_sub_recv_th.start()
+        setup_ws_sub_sender()
+
+        # this feature inner syori is nazo, so not use event loop
+        ws_sub_recv_th = threading.Thread(target=ws_sub_receiver)
+        ws_sub_recv_th.start()
+
+        #ws_sub_recv_loop = asyncio.new_event_loop()
+        #ws_sub_recv_loop.run(ws_sub_receiver())
+        #print("after ws_sub_recv_loop.run")
 
         # if args.role == 'send':
         #     #fp = open(args.filename, 'rb')
