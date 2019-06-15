@@ -84,24 +84,24 @@ def accept_and_later_msg_handle(environ, start_response):
 
         signaling_msg = ':'.join(splited_msg[1:])
 
+        # though joined member, handle this request specially
+        if "joined_members" in signaling_msg:
+            resp_msg = None
+            if channel_signiture in channel_dict:
+                resp_msg = str(len(channel_dict[channel_signiture].users))
+            else:
+                resp_msg = str(0)
+            print("send response of joined_message: " + resp_msg)
+            ws.send("{ \"members\":" + resp_msg + "}")
+            # time.sleep(2)
+            #break
+            # continue
 
         # new connection (first recieved message)
         if ws not in ws_list:
             # join already existed Channel or create new Channel
             try:
-                if "joined_members" in signaling_msg:
-                    resp_msg = None
-                    if channel_signiture in channel_dict:
-                        resp_msg = str(len(channel_dict[channel_signiture].users))
-                    else:
-                        resp_msg = str(0)
-                    print("send response of joined_message: " + resp_msg)
-                    ws.send("{ \"members\":" + resp_msg + "}")
-
-                    #time.sleep(2)
-                    break
-                    #continue
-                elif "receiver_connected" in signaling_msg:
+                if "receiver_connected" in signaling_msg:
                     print("receiver_connected msg received")
                     ws.send("receiver_connected")
                     continue

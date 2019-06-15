@@ -356,7 +356,7 @@ def ws_sub_receiver():
             if "members" in json_obj:
                 member_count = json_obj['members']
                 print(member_count)
-                if member_count >= 1:
+                if member_count >= 2:
                     is_remote_node_exists_on_my_send_room = True
 
     def on_error(ws, error):
@@ -375,7 +375,7 @@ def ws_sub_receiver():
         except:
             traceback.print_exc()
 
-    logging.basicConfig(level=logging.DEBUG)
+    #logging.basicConfig(level=logging.DEBUG)
     #websocket.enableTrace(True)
     ws = websocket.WebSocketApp("ws://" + args.signaling_host + ":" + str(args.signaling_port) + "/",
                                     on_message=on_message,
@@ -397,7 +397,7 @@ if __name__ == '__main__':
     colo = None
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
-    logging.basicConfig(level=logging.FATAL)
+    #logging.basicConfig(level=logging.FATAL)
 
     if args.hierarchy == 'parent':
         colo = work_as_parent()
@@ -409,8 +409,8 @@ if __name__ == '__main__':
         ice_state_th.start()
 
         setup_ws_sub_sender()
-        send_ws_th = threading.Thread(target=ws_sub_receiver)
-        send_ws_th.start()
+        ws_sub_recv_th = threading.Thread(target=ws_sub_receiver)
+        ws_sub_recv_th.start()
 
         if args.role == 'send':
             #fp = open(args.filename, 'rb')
