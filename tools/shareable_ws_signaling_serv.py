@@ -91,7 +91,7 @@ def accept_and_later_msg_handle(environ, start_response):
                 resp_msg = str(len(channel_dict[channel_signiture].users))
             else:
                 resp_msg = str(0)
-            print("send response of joined_message: " + resp_msg)
+            print("send response of joined_message: " + "{ \"members\":" + resp_msg + "}")
             ws.send("{ \"members\":" + resp_msg + "}")
             # time.sleep(2)
             #break
@@ -177,7 +177,7 @@ def clean_disconnected_client_ws_objs_and_channels():
         print(e)
 
 def signaling_app(environ, start_response):
-    clean_disconnected_client_ws_objs_and_channels()
+    #clean_disconnected_client_ws_objs_and_channels()
     path = environ["PATH_INFO"]
     if path == "/":
         return accept_and_later_msg_handle(environ, start_response)
