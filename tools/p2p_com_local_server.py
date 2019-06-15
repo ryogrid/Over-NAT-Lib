@@ -8,6 +8,7 @@ import sys
 import threading
 import time
 import queue
+import json
 #from io import BytesIO
 
 from aiortcdc import RTCPeerConnection, RTCSessionDescription
@@ -30,6 +31,7 @@ clientsock = None
 client_address = None
 send_ws = None
 sub_channel_sig = None
+is_remote_node_exists_on_my_send_room = False
 
 async def consume_signaling(pc, signaling):
     global force_exited
@@ -48,7 +50,7 @@ async def consume_signaling(pc, signaling):
                     await pc.setLocalDescription(await pc.createAnswer())
                     await signaling.send(pc.localDescription)
             elif isinstance(obj, str) and force_exited == False:
-                print("string recievd: " + obj, file=sys.stderr)
+                #print("string recievd: " + obj, file=sys.stderr)
                 continue
             else:
                 print('Exiting', file=sys.stderr)
@@ -271,6 +273,10 @@ def receiver_server():
         try:
             clientsock, client_address = server.accept()
             print("new client connected.", file=sys.stderr)
+            # wait until remote node join to my send room
+            while is_remote_node_exists_on_my_send_room == False:
+                ws_send_wrapper("joined_members")
+                time.sleep(3)
             ws_send_wrapper("receiver_connected")
         #     while True:
         #         try:
@@ -298,7 +304,7 @@ def setup_ws_sub_sender():
     global send_ws
     global sub_channel_sig
     send_ws = websocket.create_connection("ws://" + args.signaling_host + ":" + str(args.signaling_port) + "/")
-    print("receiver app level ws opend")
+    print("sender app level ws opend")
     if args.role == 'send':
         sub_channel_sig = args.gid + "stor"
     else:
@@ -314,8 +320,11 @@ def ws_sub_receiver():
         global remote_stdin_connected
         global done_reading
         global clientsock
+        global is_remote_node_exists_on_my_send_room
 
-        print(message,  file=sys.stderr)
+        #print(message,  file=sys.stderr)
+        print("called on_message")
+        print(message)
 
         if "receiver_connected" in message:
             print("receiver_connected")
@@ -333,6 +342,22 @@ def ws_sub_receiver():
             if clientsock:
                 clientsock.close()
                 clientsock = None
+        else:
+            json_obj = None
+            try:
+                json_obj = json.loads(message)
+            except:
+                traceback.print_exc()
+                print("josn parse failed. return.")
+                return
+
+            print("json parsed")
+            print(json_obj)
+            if "members" in json_obj:
+                member_count = json_obj['members']
+                print(member_count)
+                if member_count >= 1:
+                    is_remote_node_exists_on_my_send_room = True
 
     def on_error(ws, error):
         print(error)
@@ -342,13 +367,16 @@ def ws_sub_receiver():
 
     def on_open(ws):
         print("receiver app level ws opend")
-        if args.role == 'send':
-            ws.send(args.gid + "rtos_chsig:join")
-        else:
-            ws.send(args.gid + "stor_chsig:join")
+        try:
+            if args.role == 'send':
+                ws.send(args.gid + "rtos_chsig:join")
+            else:
+                ws.send(args.gid + "stor_chsig:join")
+        except:
+            traceback.print_exc()
 
-    logging.basicConfig(level=logging.FATAL)
-    websocket.enableTrace(True)
+    logging.basicConfig(level=logging.DEBUG)
+    #websocket.enableTrace(True)
     ws = websocket.WebSocketApp("ws://" + args.signaling_host + ":" + str(args.signaling_port) + "/",
                                     on_message=on_message,
                                     on_error=on_error,
