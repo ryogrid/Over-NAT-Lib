@@ -130,13 +130,14 @@ async def run_offer(pc, signaling):
         global remote_stdout_connected
         global clientsock
 
+        # this line is needed?
         asyncio.set_event_loop(asyncio.new_event_loop())
 
         while True:
             sctp_transport_established = True
             while remote_stdout_connected == False:
                 print("wait remote_std_connected")
-                time.sleep(1)
+                await asyncio.sleep(1)
 
             print("start waiting buffer state is OK")
             while channel_sender.bufferedAmount > channel_sender.bufferedAmountLowThreshold:
@@ -169,15 +170,19 @@ async def run_offer(pc, signaling):
 
                     # data = fifo_q.getvalue()
                     if data:
-                        print("send_data:" + str(len(data)))
-                        channel_sender.send(data)
+                        if data == bytes("", encoding="utf-8"):
+                            print("notify end of transfer")
+                            channel_sender.send(data)
+                        else:
+                            print("send_data:" + str(len(data)))
+                            channel_sender.send(data)
 
                     if clientsock == None:
                         channel_sender.send(bytes("", encoding="utf-8"))
                         remote_stdout_connected = False
                         break
 
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(0.01)
                 except:
                     traceback.print_exc()
 
@@ -259,6 +264,7 @@ def sender_server():
                     if clientsock:
                         clientsock.close()
                         clientsock = None
+                        fifo_q.put(bytes("", encoding="utf-8"))
                     ws_sender_send_wrapper("sender_disconnected")
 
                 #print("len of recvmsg:" + str(len(recvmsg)))
@@ -268,7 +274,7 @@ def sender_server():
                 else:
                     print("fifo_q.write(rcvmsg)")
                     fifo_q.put(rcvmsg)
-                time.sleep(0.1)
+                time.sleep(0.01)
             #send_data()
         except:
             traceback.print_exc()
