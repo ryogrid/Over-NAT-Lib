@@ -123,53 +123,61 @@ async def run_offer(pc, signaling):
 
     channel_sender = pc.createDataChannel('filexfer')
 
-    def send_data():
+    async def send_data_inner():
         nonlocal channel_sender
         global sctp_transport_established
         global fifo_q
         global remote_stdout_connected
         global clientsock
 
-        while True:
-            sctp_transport_established = True
-            while remote_stdout_connected == False:
-                time.sleep(1)
+        sctp_transport_established = True
+        while remote_stdout_connected == False:
+            print("wait remote_std_connected")
+            await asyncio.sleep(1)
 
-            while channel_sender.bufferedAmount > channel_sender.bufferedAmountLowThreshold:
-                time.sleep(0.1) # 100ms
+        print("start waiting buffer state is OK")
+        while channel_sender.bufferedAmount > channel_sender.bufferedAmountLowThreshold:
+            await asyncio.sleep(0.1)  # 100ms
 
-            while channel_sender.bufferedAmount <= channel_sender.bufferedAmountLowThreshold:
+        print("start sending roop")
+        while channel_sender.bufferedAmount <= channel_sender.bufferedAmountLowThreshold:
+            try:
+                # if not fifo_q.empty():
+                #     data = fifo_q.get()
+                #     # data = fifo_q.getvalue()
+                #     print("send_data:" + str(len(data)))
+                #     channel_sender.send(data)
+                #     # if not data:
+                #     #     done_reading = True
+                # else:
+                #     done_reading = True
+                #     # notify sending finish
+                #     #channel_sender.send(bytearray())
+                #     channel_sender.send(bytes("", encoding="utf-8"))
+
+                data = None
                 try:
-                    # if not fifo_q.empty():
-                    #     data = fifo_q.get()
-                    #     # data = fifo_q.getvalue()
-                    #     print("send_data:" + str(len(data)))
-                    #     channel_sender.send(data)
-                    #     # if not data:
-                    #     #     done_reading = True
-                    # else:
-                    #     done_reading = True
-                    #     # notify sending finish
-                    #     #channel_sender.send(bytearray())
-                    #     channel_sender.send(bytes("", encoding="utf-8"))
+                    print("try get data from queue")
+                    data = fifo_q.get(block=True, timeout=5)
+                    print("got get data from queue")
+                except queue.Empty:
+                    pass
 
-                    data = None
-                    try:
-                        data = fifo_q.get(block=True, timeout=5)
-                    except queue.Empty:
-                        pass
+                # data = fifo_q.getvalue()
+                if data:
+                    print("send_data:" + str(len(data)))
+                    channel_sender.send(data)
 
-                    # data = fifo_q.getvalue()
-                    if data:
-                        print("send_data:" + str(len(data)))
-                        channel_sender.send(data)
+                if clientsock == None:
+                    channel_sender.send(bytes("", encoding="utf-8"))
+                    remote_stdout_connected = False
+                    break
+            except:
+                traceback.print_exc()
 
-                    if clientsock == None:
-                        channel_sender.send(bytes("", encoding="utf-8"))
-                        remote_stdout_connected = False
-                        break
-                except:
-                    traceback.print_exc()
+    async def send_data():
+        while True:
+            await send_data_inner()
 
     channel_sender.on('bufferedamountlow', send_data)
     channel_sender.on('open', send_data)
