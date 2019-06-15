@@ -264,12 +264,12 @@ def sender_server():
                     if clientsock:
                         clientsock.close()
                         clientsock = None
-                        fifo_q.put(bytes("", encoding="utf-8"))
                     ws_sender_send_wrapper("sender_disconnected")
 
                 #print("len of recvmsg:" + str(len(recvmsg)))
                 if rcvmsg == None or len(rcvmsg) == 0:
                     print("break")
+                    fifo_q.put(bytes("", encoding="utf-8"))
                     break
                 else:
                     print("fifo_q.write(rcvmsg)")
