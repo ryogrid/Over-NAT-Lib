@@ -257,7 +257,7 @@ def sender_server():
                 #print("len of recvmsg:" + str(len(recvmsg)))
                 if rcvmsg == None or len(rcvmsg) == 0:
                     print("break")
-                    fifo_q.put("finished")
+                    #fifo_q.put("finished")
                     break
                 else:
                     print("fifo_q.write(rcvmsg)")
@@ -298,17 +298,6 @@ def receiver_server():
                     is_remote_node_exists_on_my_send_room = True
                 time.sleep(3)
             ws_sender_send_wrapper("receiver_connected")
-        #     while True:
-        #         try:
-        #             rcvmsg = fifo_q.read(1024)
-        #         except Exception as e:
-        #             print(e,  file=sys.stderr)
-        #
-        #         #print('Received -> %s' % (rcvmsg))
-        #         if rcvmsg == None or len(rcvmsg) == 0:
-        #           break
-        #         else:
-        #             clientsock.sendall(rcvmsg)
         except:
             traceback.print_exc()
             ws_sender_send_wrapper("receiver_disconnected")
@@ -333,50 +322,6 @@ def setup_ws_sub_sender():
 
     ws_keep_alive_th = threading.Thread(target=send_keep_alive)
     ws_keep_alive_th.start()
-
-# def ws_sub_receiver():
-#     global remote_stdout_connected
-#     global remote_stdin_connected
-#     global done_reading
-#     global clientsock
-#     global is_remote_node_exists_on_my_send_room
-#
-#     ws = websocket.create_connection("ws://" + args.signaling_host + ":" + str(args.signaling_port) + "/")
-#     print("receiver app level ws opend")
-#     try:
-#         if args.role == 'send':
-#             ws.send(args.gid + "rtos_chsig:join")
-#         else:
-#             ws.send(args.gid + "stor_chsig:join")
-#     except:
-#         traceback.print_exc()
-#
-#     while True:
-#         message = ws.recv()
-#         print("recieved message as ws_sub_receiver")
-#         print(message)
-#
-#         if "receiver_connected" in message:
-#             print("receiver_connected")
-#             #print(fifo_q.getbuffer().nbytes)
-#             remote_stdout_connected = True
-#             # if fifo_q.getbuffer().nbytes != 0:
-#             #     send_data()
-#         elif "receiver_disconnected" in message:
-#             remote_stdout_connected = False
-#             done_reading = False
-#         elif "sender_connected" in message:
-#             remote_stdin_connected = True
-#         elif "sender_disconnected" in message:
-#             remote_stdin_connected = False
-#             if clientsock:
-#                 clientsock.close()
-#                 clientsock = None
-#         elif "member_count" in message: # respons of joined_members_sub
-#             splited = message.split(":")
-#             member_num = int(splited[1])
-#             if member_num >= 2:
-#                 is_remote_node_exists_on_my_send_room = True
 
 def ws_sub_receiver():
     def on_message(ws, message):
@@ -409,11 +354,6 @@ def ws_sub_receiver():
                 print("disconnect clientsock")
                 clientsock.close()
                 clientsock = None
-        # elif "member_count" in message: # respons of joined_members_sub
-        #     splited = message.split(":")
-        #     member_num = int(splited[1])
-        #     if member_num >= 2:
-        #         is_remote_node_exists_on_my_send_room = True
 
     def on_error(ws, error):
         print(error)
