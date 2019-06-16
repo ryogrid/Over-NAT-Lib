@@ -176,7 +176,7 @@ async def run_offer(pc, signaling):
                     #     remote_stdout_connected = False
                     #     break
 
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(0.01)
                 except:
                     traceback.print_exc()
 
@@ -260,7 +260,7 @@ async def sender_server_handler(reader, writer):
             else:
                 print("fifo_q.write(rcvmsg)")
                 await sender_fifo_q.put(rcvmsg)
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.01)
         #send_data()
     except:
         traceback.print_exc()
