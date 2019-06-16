@@ -82,6 +82,7 @@ def receiver_loop():
                 rcvmsg = client.recv(1024)
                 #print('Received -> %s' % (rcvmsg))
                 if len(rcvmsg) == 8 and rcvmsg.decode() == "finished":
+                    f.flush()
                     client.close()
                     sys.exit(0)
                 if rcvmsg == None or len(rcvmsg) == 0:
