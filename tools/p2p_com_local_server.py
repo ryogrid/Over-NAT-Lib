@@ -34,6 +34,8 @@ send_ws = None
 sub_channel_sig = None
 is_remote_node_exists_on_my_send_room = False
 
+is_received_client_disconnect_request = False
+
 server_send = None
 server_rcv = None
 
@@ -163,7 +165,8 @@ async def run_offer(pc, signaling):
 
                     # data = fifo_q.getvalue()
                     if data:
-                        if type(data) is "str" and data == "finished":
+                        print(type(data))
+                        if type(data) is str:
                             print("notify end of transfer")
                             #channel_sender.send(data)
                             ws_sender_send_wrapper("sender_disconnected")
@@ -255,7 +258,7 @@ async def sender_server_handler(reader, writer):
             #print("len of recvmsg:" + str(len(recvmsg)))
             if rcvmsg == None or len(rcvmsg) == 0:
                 print("break")
-                await sender_fifo_q.put("finished")
+                await sender_fifo_q.put(str("finished"))
                 break
             else:
                 print("fifo_q.write(rcvmsg)")
@@ -296,6 +299,7 @@ async def receiver_server_handler(reader, writer):
     global receiver_fifo_q
     #global clientsock, client_address
     global is_remote_node_exists_on_my_send_room
+    global is_received_client_disconnect_request
 
     #if not args.target:
     #    args.target = '0.0.0.0'
@@ -309,6 +313,14 @@ async def receiver_server_handler(reader, writer):
             #clientsock, client_address = server.accept()
             #print("new client connected.", file=sys.stderr)
             # wait until remote node join to my send room
+
+            # finish of handler function should disconnect connection between client
+            print("is_received_client_disconnect_request: " + str(is_received_client_disconnect_request))
+            if is_received_client_disconnect_request == True:
+                is_received_client_disconnect_request = False
+                await writer.write("finished".encode())
+                return
+
             while is_remote_node_exists_on_my_send_room == False:
                 ws_sender_send_wrapper("joined_members_sub")
                 message = ws_sender_recv_wrapper()
@@ -316,28 +328,36 @@ async def receiver_server_handler(reader, writer):
                 member_num = int(splited[1])
                 if member_num >= 2:
                     is_remote_node_exists_on_my_send_room = True
+                    #ws_sender_send_wrapper("receiver_connected")
                 #time.sleep(3)
                 await asyncio.sleep(3)
+
             ws_sender_send_wrapper("receiver_connected")
 
             data = None
             try:
-                print("try get data from queue")
-                data = await receiver_fifo_q.get()
-                print("got get data from queue")
-            except queue.Empty:
-                pass
+                #print("try get data from queue")
+                # done, pending = await asyncio.wait_for([receiver_fifo_q.get()], timeout=5)
+                # tmp_loop = asyncio.get_event_loop()
+                # data = loop.run_until_complete(done.pop().result())
+                #data = await receiver_fifo_q.get()
+                data = await receiver_fifo_q.get_nowait()
+                #print("got get data from queue")
+            except:
+                await asyncio.sleep(1)
+                #traceback.print_exc()
+                #pass
 
             # data = fifo_q.getvalue()
             if data:
-                if type(data) is "str" and data == "finished":
-                    print("notify end of transfer")
-                    # channel_sender.send(data)
-                    ws_sender_send_wrapper("sender_disconnected")
-                else:
-                    print("send_data:" + str(len(data)))
-                    writer.write(data)
-                    await writer.drain()
+                # if type(data) is "str" and data == "finished":
+                #     print("notify end of transfer")
+                #     # channel_sender.send(data)
+                #     ws_sender_send_wrapper("sender_disconnected")
+                # else:
+                print("send_data:" + str(len(data)))
+                writer.write(data)
+                await writer.drain()
             await asyncio.sleep(0.01)
         except:
             traceback.print_exc()
@@ -383,6 +403,7 @@ def ws_sub_receiver():
         global done_reading
         #global clientsock
         global is_remote_node_exists_on_my_send_room
+        global is_received_client_disconnect_request
 
         #print(message,  file=sys.stderr)
         print("called on_message")
@@ -402,6 +423,7 @@ def ws_sub_receiver():
         elif "sender_disconnected" in message:
             print("sender_disconnected")
             remote_stdin_connected = False
+            is_received_client_disconnect_request = True
             # if clientsock:
             #     time.sleep(5)
             #     print("disconnect clientsock")
