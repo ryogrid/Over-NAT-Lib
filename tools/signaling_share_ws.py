@@ -50,14 +50,15 @@ def object_to_string(obj):
     return json.dumps(message, sort_keys=True)
 
 class WebsocketSignaling:
-    def __init__(self, host, port, gid):
+    def __init__(self, host, port, gid, ws_protcol_str):
         self._host = host
         self._port = port
         self._gid_str = gid
         self._websocket = None
+        self._ws_protcol_str = ws_protcol_str
 
     async def connect(self):
-        self._websocket = await websockets.connect("ws://" + str(self._host) + ":" + str(self._port))
+        self._websocket = await websockets.connect(self._ws_protcol_str + "://" + str(self._host) + ":" + str(self._port))
 
     async def close(self):
         if self._websocket is not None and self._websocket.open is True:
@@ -95,15 +96,23 @@ def add_signaling_arguments(parser):
     parser.add_argument('--signaling', '-s', choices=[
         'share-websocket'])
     parser.add_argument('--signaling-host', default='127.0.0.1',
-                        help='Signaling host (share-websocket only)')
+                        help='Signaling server host')
     parser.add_argument('--signaling-port', default=1234,
-                        help='Signaling port (share-websocket only)')
+                        help='Signaling server port')
+    parser.add_argument('--secure-signaling',
+                        help='Signaling communication is encrypted', action='store_true')
+
 
 def create_signaling(args):
     """
     Create a signaling method based on command-line arguments.
     """
+
+    ws_protcol_str = "ws"
+    if args.secure_signaling == True:
+        ws_protcol_str = "wss"
+
     if args.signaling == 'share-websocket':
-        return WebsocketSignaling(args.signaling_host, args.signaling_port, str(args.gid) + "_chsig")
+        return WebsocketSignaling(args.signaling_host, args.signaling_port, str(args.gid) + "_chsig", ws_protcol_str)
     else:
         raise Exception("unknown signaling at singnaling_share_ws module.")

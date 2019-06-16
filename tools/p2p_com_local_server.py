@@ -9,8 +9,10 @@ import threading
 import time
 import queue
 import json
-#from io import BytesIO
 
+from os import path
+#sys.path.append(path.dirname(path.abspath(__file__)) + "/../../")
+#sys.path.insert(0, path.dirname(path.abspath(__file__)) + "/../../tmp/punch_sctp_plain_tmp/")
 from aiortcdc import RTCPeerConnection, RTCSessionDescription
 
 from signaling_share_ws import add_signaling_arguments, create_signaling
@@ -423,7 +425,7 @@ async def send_keep_alive():
 def setup_ws_sub_sender():
     global send_ws
     global sub_channel_sig
-    send_ws = websocket.create_connection("ws://" + args.signaling_host + ":" + str(args.signaling_port) + "/")
+    send_ws = websocket.create_connection(ws_protcol_str +  "://" + args.signaling_host + ":" + str(args.signaling_port) + "/")
     print("sender app level ws opend")
     if args.role == 'send':
         sub_channel_sig = args.gid + "stor"
@@ -487,7 +489,7 @@ def ws_sub_receiver():
 
     #logging.basicConfig(level=logging.DEBUG)
     #websocket.enableTrace(True)
-    ws = websocket.WebSocketApp("ws://" + args.signaling_host + ":" + str(args.signaling_port) + "/",
+    ws = websocket.WebSocketApp(ws_protcol_str + "://" + args.signaling_host + ":" + str(args.signaling_port) + "/",
                                     on_message=on_message,
                                     on_error=on_error,
                                     on_close=on_close)
@@ -514,6 +516,10 @@ if __name__ == '__main__':
     #parser.add_argument('filename')
     parser.add_argument('--role', choices=['send', 'receive'])
     parser.add_argument('--verbose', '-v', action='count')
+    parser.add_argument('--send-stream-port', default=10100,
+                        help='This local server make datachannel stream readable at this port')
+    parser.add_argument('--recv-stream-port', default=10200,
+                        help='This local server make datachannel stream readable at this port')
     add_signaling_arguments(parser)
     args = parser.parse_args()
 
@@ -521,6 +527,10 @@ if __name__ == '__main__':
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
     #logging.basicConfig(level=logging.FATAL)
+
+    ws_protcol_str = "ws"
+    if args.secure_signaling == True:
+        ws_protcol_str = "wss"
 
     if args.hierarchy == 'parent':
         colo = work_as_parent()
