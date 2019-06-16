@@ -157,9 +157,16 @@ async def run_offer(pc, signaling):
                 try:
                     data = None
                     try:
-                        print("try get data from queue")
-                        data = await sender_fifo_q.get()
-                        print("got data from queue")
+                        is_empty = sender_fifo_q.empty()
+                        print("queue is empty? at send_data_inner: " + str(is_empty))
+                        if is_empty != True:
+                            data = await sender_fifo_q.get()
+                        else:
+                            await asyncio.sleep(1)
+                            continue
+                        # print("try get data from queue")
+                        # data = await sender_fifo_q.get()
+                        # print("got data from queue")
                     except:
                         traceback.print_exc()
 
