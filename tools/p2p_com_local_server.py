@@ -169,7 +169,9 @@ async def run_offer(pc, signaling):
                         if type(data) is str:
                             print("notify end of transfer")
                             #channel_sender.send(data)
-                            ws_sender_send_wrapper("sender_disconnected")
+
+                            #ws_sender_send_wrapper("sender_disconnected")
+                            channel_sender.send(data.encode())
                         else:
                             print("send_data:" + str(len(data)))
                             channel_sender.send(data)
@@ -316,10 +318,11 @@ async def receiver_server_handler(reader, writer):
 
             # finish of handler function should disconnect connection between client
             # print("is_received_client_disconnect_request: " + str(is_received_client_disconnect_request))
-            if is_received_client_disconnect_request == True:
-                is_received_client_disconnect_request = False
-                await writer.write("finished".encode())
-                return
+
+            # if is_received_client_disconnect_request == True:
+            #     is_received_client_disconnect_request = False
+            #     await writer.write("finished".encode())
+            #     return
 
             while is_remote_node_exists_on_my_send_room == False:
                 ws_sender_send_wrapper("joined_members_sub")
@@ -328,9 +331,11 @@ async def receiver_server_handler(reader, writer):
                 member_num = int(splited[1])
                 if member_num >= 2:
                     is_remote_node_exists_on_my_send_room = True
+                else:
+                    await asyncio.sleep(3)
                     #ws_sender_send_wrapper("receiver_connected")
                 #time.sleep(3)
-                await asyncio.sleep(3)
+
 
             ws_sender_send_wrapper("receiver_connected")
 
@@ -340,12 +345,21 @@ async def receiver_server_handler(reader, writer):
                 # done, pending = await asyncio.wait_for([receiver_fifo_q.get()], timeout=5)
                 # tmp_loop = asyncio.get_event_loop()
                 # data = loop.run_until_complete(done.pop().result())
+
                 #data = await receiver_fifo_q.get()
-                data = await receiver_fifo_q.get_nowait()
+                #qsize = await receiver_fifo_q.qdize()
+                #if qsize > 0:
+                is_empty = receiver_fifo_q.empty()
+                print("queue is empty? at receiver_server_handler: " + str(is_empty))
+                if is_empty != True:
+                    data = await receiver_fifo_q.get()
+                else:
+                    await asyncio.sleep(1)
+                    continue
                 #print("got get data from queue")
             except:
+                traceback.print_exc()
                 await asyncio.sleep(1)
-                #traceback.print_exc()
                 #pass
 
             # data = fifo_q.getvalue()
