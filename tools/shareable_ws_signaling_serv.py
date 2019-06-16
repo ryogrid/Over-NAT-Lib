@@ -5,6 +5,7 @@ from gevent import pywsgi, sleep
 import traceback
 import copy
 import time
+import argparse
 
 ws_list = []
 channel_dict = {}
@@ -196,6 +197,19 @@ def signaling_app(environ, start_response):
         raise Exception('path not found.')
 
 
-print("Server is running on localhost:10000...")
-server = pywsgi.WSGIServer(('0.0.0.0', 10000), signaling_app, handler_class=WebSocketHandler)
-server.serve_forever()
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='WebRTC datachannel signaling server with websocket protcol')
+    parser.add_argument('--secure',
+                        help='Signaling communication is encrypted', action='store_true')
+    args = parser.parse_args()
+
+    print("Server is running on localhost:10000...")
+    server = None
+    if args.secure == True:
+        server = pywsgi.WSGIServer(('0.0.0.0', 10000), signaling_app, handler_class=WebSocketHandler,
+                                   keyfile='privkey.pem', certfile='fullchain.pem')
+    else:
+        server = pywsgi.WSGIServer(('0.0.0.0', 10000), signaling_app, handler_class=WebSocketHandler)
+
+    server.serve_forever()
