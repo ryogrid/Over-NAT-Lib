@@ -316,7 +316,8 @@ async def sender_server():
 
     try:
         server_send = await asyncio.start_server(
-            sender_server_handler, '127.0.0.1', 10100)
+            sender_server_handler, '127.0.0.1', args.send_stream_port)
+            #sender_server_handler, '127.0.0.1', 10100)
     except:
         traceback.print_exc()
 
@@ -407,7 +408,9 @@ async def receiver_server():
     global server_rcv
     try:
         server_rcv = await asyncio.start_server(
-            receiver_server_handler, '127.0.0.1', 10200)
+            receiver_server_handler, '127.0.0.1', args.recv_stream_port)
+            #receiver_server_handler, '127.0.0.1', 10200)
+
     except:
         traceback.print_exc()
 
