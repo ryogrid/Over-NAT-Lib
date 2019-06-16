@@ -315,7 +315,7 @@ async def receiver_server_handler(reader, writer):
             # wait until remote node join to my send room
 
             # finish of handler function should disconnect connection between client
-            print("is_received_client_disconnect_request: " + str(is_received_client_disconnect_request))
+            # print("is_received_client_disconnect_request: " + str(is_received_client_disconnect_request))
             if is_received_client_disconnect_request == True:
                 is_received_client_disconnect_request = False
                 await writer.write("finished".encode())
