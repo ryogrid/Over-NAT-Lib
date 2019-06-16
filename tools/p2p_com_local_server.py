@@ -83,20 +83,22 @@ async def run_answer(pc, signaling):
             #global clientsock
 
             try:
-                print("message event fired")
+                print("message event fired", file=sys.stderr)
+                print("message received from datachannel: " + str(len(message)), file=sys.stderr)
                 if len(message) > 0:
                     octets += len(message)
                     await receiver_fifo_q.put(message)
                     # if clientsock != None:
                     #     clientsock.sendall(message)
-                else:
-                    elapsed = time.time() - start
-                    if elapsed == 0:
-                        elapsed = 0.001
-                    print('received %d bytes in %.1f s (%.3f Mbps)' % (
-                        octets, elapsed, octets * 8 / elapsed / 1000000), file=sys.stderr)
-                    # if clientsock != None:
-                    #     clientsock.close()
+                # else:
+                #     elapsed = time.time() - start
+                #     if elapsed == 0:
+                #         elapsed = 0.001
+                #     print('received %d bytes in %.1f s (%.3f Mbps)' % (
+                #         octets, elapsed, octets * 8 / elapsed / 1000000), file=sys.stderr)
+
+                # if clientsock != None:
+                #     clientsock.close()
             except:
                 traceback.print_exc()
                 # if clientsock:
@@ -144,21 +146,21 @@ async def run_offer(pc, signaling):
         while True:
             sctp_transport_established = True
             while remote_stdout_connected == False:
-                print("wait remote_std_connected")
+                print("wait remote_std_connected", file=sys.stderr)
                 await asyncio.sleep(1)
 
-            print("start waiting buffer state is OK")
+            print("start waiting buffer state is OK", file=sys.stderr)
             while channel_sender.bufferedAmount > channel_sender.bufferedAmountLowThreshold:
-                print("buffer info of channel: " + str(channel_sender.bufferedAmount) + " > " + str( channel_sender.bufferedAmountLowThreshold))
+                #print("buffer info of channel: " + str(channel_sender.bufferedAmount) + " > " + str( channel_sender.bufferedAmountLowThreshold))
                 await asyncio.sleep(1)
 
-            print("start sending roop")
+            print("start sending roop", file=sys.stderr)
             while channel_sender.bufferedAmount <= channel_sender.bufferedAmountLowThreshold:
                 try:
                     data = None
                     try:
                         is_empty = sender_fifo_q.empty()
-                        print("queue is empty? at send_data_inner: " + str(is_empty))
+                        print("queue is empty? at send_data_inner: " + str(is_empty), file=sys.stderr)
                         if is_empty != True:
                             data = await sender_fifo_q.get()
                         else:
@@ -172,7 +174,7 @@ async def run_offer(pc, signaling):
 
                     # data = fifo_q.getvalue()
                     if data:
-                        print(type(data))
+                        #print(type(data))
                         if type(data) is str:
                             print("notify end of transfer")
                             #channel_sender.send(data)
@@ -180,7 +182,7 @@ async def run_offer(pc, signaling):
                             #ws_sender_send_wrapper("sender_disconnected")
                             channel_sender.send(data.encode())
                         else:
-                            print("send_data:" + str(len(data)))
+                            print("send_data: " + str(len(data)))
                             channel_sender.send(data)
 
                     # if clientsock == None:
@@ -240,7 +242,9 @@ async def sender_server_handler(reader, writer):
     global sender_fifo_q
     #global clientsock
 
-    print('Waiting for connections...', file=sys.stderr)
+    print('local server Waiting for connections...')
+
+    byte_buf = b''
 
     try:
         #clientsock, client_address = server.accept()
@@ -253,9 +257,16 @@ async def sender_server_handler(reader, writer):
         while True:
             rcvmsg = None
             try:
-                rcvmsg = await reader.read(2048)
-                print("received message from client")
-                print(len(rcvmsg))
+                rcvmsg = await reader.read(5120)
+                byte_buf = b''.join([byte_buf, rcvmsg])
+                print("received message from client", file=sys.stderr)
+                print(len(rcvmsg), file=sys.stderr)
+
+                # block sends until bufferd data amount is gleater than 100KB
+                if(len(byte_buf) <= 1024 * 512) and (rcvmsg != None and len(rcvmsg) > 0): #1MB
+                    print("current bufferd byteds: " + str(len(byte_buf)), file=sys.stderr)
+                    await asyncio.sleep(0.01)
+                    continue
             except:
                 traceback.print_exc()
                 # print("maybe client disconnect")
@@ -266,12 +277,18 @@ async def sender_server_handler(reader, writer):
 
             #print("len of recvmsg:" + str(len(recvmsg)))
             if rcvmsg == None or len(rcvmsg) == 0:
+                if len(byte_buf) > 0:
+                    await sender_fifo_q.put(byte_buf)
+                    testing_byte_buf = b''
                 print("break")
                 await sender_fifo_q.put(str("finished"))
                 break
             else:
-                print("fifo_q.write(rcvmsg)")
-                await sender_fifo_q.put(rcvmsg)
+                #print("fifo_q.write(rcvmsg)")
+                print("put bufferd bytes: " + str(len(byte_buf)), file=sys.stderr)
+                await sender_fifo_q.put(byte_buf)
+                #await sender_fifo_q.put(rcvmsg)
+                byte_buf = b''
             await asyncio.sleep(0.01)
         #send_data()
     except:
@@ -357,7 +374,7 @@ async def receiver_server_handler(reader, writer):
                 #qsize = await receiver_fifo_q.qdize()
                 #if qsize > 0:
                 is_empty = receiver_fifo_q.empty()
-                print("queue is empty? at receiver_server_handler: " + str(is_empty))
+                print("queue is empty? at receiver_server_handler: " + str(is_empty), file=sys.stderr)
                 if is_empty != True:
                     data = await receiver_fifo_q.get()
                 else:
@@ -376,7 +393,7 @@ async def receiver_server_handler(reader, writer):
                 #     # channel_sender.send(data)
                 #     ws_sender_send_wrapper("sender_disconnected")
                 # else:
-                print("send_data:" + str(len(data)))
+                print("send_data: " + str(len(data)))
                 writer.write(data)
                 await writer.drain()
             await asyncio.sleep(0.01)
@@ -427,11 +444,12 @@ def ws_sub_receiver():
         global is_received_client_disconnect_request
 
         #print(message,  file=sys.stderr)
-        print("called on_message")
-        print(message)
+        print("called on_message", file=sys.stderr)
+        #print(message)
 
         if "receiver_connected" in message:
-            print("receiver_connected")
+            if remote_stdout_connected == False:
+                print("receiver_connected")
             #print(fifo_q.getbuffer().nbytes)
             remote_stdout_connected = True
             # if fifo_q.getbuffer().nbytes != 0:
