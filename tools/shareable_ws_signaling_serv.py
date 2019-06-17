@@ -181,13 +181,14 @@ def clean_disconnected_client_ws_objs_and_channels():
                 print("disconnected client found.")
                 #traceback.print_exc()
                 remove_list.append(s)
-                next
+                #next
         for s in remove_list:
             ws_list.remove(s)
             for channel_sig in channel_dict.keys():
                 channel_obj = channel_dict[channel_sig]
                 print("user remove len (BEFORE):" + str(len(channel_obj.users)))
-                channel_obj.users.remove(s)
+                if s in channel_obj.users:
+                    channel_obj.users.remove(s)
                 print("user remove len (AFTER):" + str(len(channel_obj.users)))
 
         dict_keys = copy.copy(list(channel_dict.keys()))
