@@ -327,6 +327,8 @@ async def receiver_server_handler(reader, writer):
     #global clientsock, client_address
     global is_remote_node_exists_on_my_send_room
     global is_received_client_disconnect_request
+    global send_ws
+    global sub_channel_sig
 
     #if not args.target:
     #    args.target = '0.0.0.0'
@@ -350,20 +352,24 @@ async def receiver_server_handler(reader, writer):
             #     return
 
             while is_remote_node_exists_on_my_send_room == False:
+                send_ws = websocket.create_connection(
+                    ws_protcol_str + "://" + args.signaling_host + ":" + str(args.signaling_port) + "/")
+                sub_channel_sig = args.gid + "rtos"
                 ws_sender_send_wrapper("joined_members_sub")
+
                 message = ws_sender_recv_wrapper()
                 print("response of joined_members_sub: " + message)
                 splited = message.split(":")
                 member_num = int(splited[1])
                 if member_num >= 1:
                     is_remote_node_exists_on_my_send_room = True
-                    setup_ws_sub_sender()
+                    #setup_ws_sub_sender()
+                    ws_sender_send_wrapper("join")
                     print("new client connected")
                 else:
                     await asyncio.sleep(3)
                     #ws_sender_send_wrapper("receiver_connected")
                 #time.sleep(3)
-
 
             ws_sender_send_wrapper("receiver_connected")
 
@@ -453,15 +459,16 @@ async def send_keep_alive():
         #time.sleep(5)
         await asyncio.sleep(5)
 
-def setup_ws_sub_sender():
+def setup_ws_sub_sender_for_sender_server():
     global send_ws
     global sub_channel_sig
     send_ws = websocket.create_connection(ws_protcol_str +  "://" + args.signaling_host + ":" + str(args.signaling_port) + "/")
     print("sender app level ws opend")
-    if args.role == 'send':
-        sub_channel_sig = args.gid + "stor"
-    else:
-        sub_channel_sig = args.gid + "rtos"
+    sub_channel_sig = args.gid + "stor"
+    # if args.role == 'send':
+    #     sub_channel_sig = args.gid + "stor"
+    # else:
+    #     sub_channel_sig = args.gid + "rtos"
     ws_sender_send_wrapper("join")
 
     # ws_keep_alive_th = threading.Thread(target=send_keep_alive)
@@ -584,7 +591,7 @@ if __name__ == '__main__':
         #print("after ws_sub_recv_loop.run")
 
         if args.role == 'send':
-            setup_ws_sub_sender()
+            setup_ws_sub_sender_for_sender_server()
         #     #fp = open(args.filename, 'rb')
         #     sender_th = threading.Thread(target=sender_server)
         #     sender_th.start()
