@@ -67,7 +67,12 @@ def accept_and_later_msg_handle(environ, start_response):
                 ws_list.remove(s)
             remove_list = []
 
-        msg = ws.receive()
+        msg = None
+        try:
+            msg = ws.receive()
+        except:
+            print("maybe client disconnected.")
+
         if msg is None:
             break
 
