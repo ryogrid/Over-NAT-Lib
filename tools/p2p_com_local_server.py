@@ -358,6 +358,7 @@ async def receiver_server_handler(reader, writer):
                 member_num = int(splited[1])
                 if member_num >= 2:
                     is_remote_node_exists_on_my_send_room = True
+                    print("new client connected")
                 else:
                     await asyncio.sleep(3)
                     #ws_sender_send_wrapper("receiver_connected")
@@ -382,11 +383,15 @@ async def receiver_server_handler(reader, writer):
                     data = await receiver_fifo_q.get()
                 else:
                     await asyncio.sleep(1)
-                    continue
+                    # # check client alived
+                    # writer.write(b'')
+                    # await writer.drain()
+                    #continue
                 #print("got get data from queue")
             except:
                 traceback.print_exc()
-                await asyncio.sleep(1)
+                break
+                #await asyncio.sleep(1)
                 #pass
 
             # data = fifo_q.getvalue()
@@ -398,11 +403,26 @@ async def receiver_server_handler(reader, writer):
                 # else:
                 print("send_data: " + str(len(data)))
                 writer.write(data)
+                #if(writer.transport.is_closing() == True):
+                #print("client is_closing:" + str(writer.transport.is_closing()))
+                if len(data) == 8: # maybe "finished message"
+                    decoded_str = None
+                    try:
+                        decoded_str = data.decode()
+                    except:
+                        traceback.print_exc()
+
+                    if decoded_str == "finished":
+                        await asyncio.sleep(3)
+                        writer.transport.close()
+                        print("break because client disconnected")
+                        break
                 await writer.drain()
             await asyncio.sleep(0.01)
         except:
             traceback.print_exc()
             ws_sender_send_wrapper("receiver_disconnected")
+            break
 
 async def receiver_server():
     global server_rcv
