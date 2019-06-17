@@ -3,16 +3,14 @@
 import argparse
 import asyncio
 import logging
-import socket
 import sys
 import threading
 import time
-import queue
-import json
 
-from os import path
+#from os import path
 #sys.path.append(path.dirname(path.abspath(__file__)) + "/../../")
 #sys.path.insert(0, path.dirname(path.abspath(__file__)) + "/../../tmp/punch_sctp_plain_tmp/")
+
 from aiortcdc import RTCPeerConnection, RTCSessionDescription
 
 from signaling_share_ws import add_signaling_arguments, create_signaling
@@ -354,6 +352,7 @@ async def receiver_server_handler(reader, writer):
             while is_remote_node_exists_on_my_send_room == False:
                 ws_sender_send_wrapper("joined_members_sub")
                 message = ws_sender_recv_wrapper()
+                print("response of joined_members_sub: " + message)
                 splited = message.split(":")
                 member_num = int(splited[1])
                 if member_num >= 2:
@@ -404,19 +403,27 @@ async def receiver_server_handler(reader, writer):
                 print("send_data: " + str(len(data)))
                 writer.write(data)
                 #if(writer.transport.is_closing() == True):
-                #print("client is_closing:" + str(writer.transport.is_closing()))
-                if len(data) == 8: # maybe "finished message"
-                    decoded_str = None
-                    try:
-                        decoded_str = data.decode()
-                    except:
-                        traceback.print_exc()
+                print("client is_closing:" + str(writer.transport.is_closing()))
 
-                    if decoded_str == "finished":
-                        await asyncio.sleep(3)
-                        writer.transport.close()
-                        print("break because client disconnected")
-                        break
+                # check client alive
+                read_data = await reader.read(1024)
+                if read_data == None or len(read_data) == 0:
+                    print("break because client disconnected")
+                    break
+
+                # if len(data) == 8: # maybe "finished message"
+                #     decoded_str = None
+                #     try:
+                #         decoded_str = data.decode()
+                #     except:
+                #         traceback.print_exc()
+                #
+                #     if decoded_str == "finished":
+                #         await asyncio.sleep(3)
+                #         writer.transport.close()
+                #         print("break because client disconnected")
+                #         break
+
                 await writer.drain()
             await asyncio.sleep(0.01)
         except:
@@ -591,6 +598,10 @@ if __name__ == '__main__':
     try:
         # run event loop
         loop = asyncio.get_event_loop()
+        # if os.name == 'nt':
+        #     loop = asyncio.ProactorEventLoop()
+        # else:
+        #     loop = asyncio.get_event_loop()
         try:
             #loop.run_until_complete(coro)
             loop.run_until_complete(parallel_by_gather())
