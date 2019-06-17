@@ -199,12 +199,14 @@ def clean_disconnected_client_ws_objs_and_channels():
 
 def signaling_app(environ, start_response):
     #clean_disconnected_client_ws_objs_and_channels()
-    path = environ["PATH_INFO"]
-    if path == "/":
-        return accept_and_later_msg_handle(environ, start_response)
-    else:
-        raise Exception('path not found.')
-
+    try:
+        path = environ["PATH_INFO"]
+        if path == "/":
+            return accept_and_later_msg_handle(environ, start_response)
+        else:
+            print('path not found.')
+    except:
+        print("maybe client disconnected.")
 
 
 if __name__ == '__main__':
