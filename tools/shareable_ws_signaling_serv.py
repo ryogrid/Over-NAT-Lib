@@ -199,7 +199,7 @@ def clean_disconnected_client_ws_objs_and_channels():
         print(e)
 
 def signaling_app(environ, start_response):
-    #clean_disconnected_client_ws_objs_and_channels()
+    clean_disconnected_client_ws_objs_and_channels()
     try:
         path = environ["PATH_INFO"]
         if path == "/":
