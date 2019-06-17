@@ -18,14 +18,13 @@ class Channel(object):
         self.channel_sig = channel_sig
 
     def join(self, user_ws):
-        self.users.append(user_ws)
-        # if user_ws not in self.users:
-        #     if len(self.users) < 2:
-        #         print("joined to " + self.channel_sig)
-        #         self.users.append(user_ws)
-        #     else:
-        #         print("chanel member capacity is already full")
-        #         raise Exception("chanel member capacity is already full")
+        if user_ws not in self.users:
+            if len(self.users) < 2:
+                print("joined to " + self.channel_sig)
+                self.users.append(user_ws)
+            else:
+                print("chanel member capacity is already full")
+                raise Exception("chanel member capacity is already full")
 
     def remove(self, user_ws):
         if user_ws in self.users:
@@ -170,39 +169,39 @@ def accept_and_later_msg_handle(environ, start_response):
                 #ws.send("join to " + channel_signiture + " is denided.")
                 break
 
-# def clean_disconnected_client_ws_objs_and_channels():
-#     global ws_list
-#     global channel_dict
-#
-#     try:
-#         remove_list = []
-#         for s in ws_list:
-#             try:
-#                 s.send("check_alive_msg")
-#             except:
-#                 # Possibility to execute code when connection is closed
-#                 print("disconnected client found.")
-#                 #traceback.print_exc()
-#                 remove_list.append(s)
-#                 #next
-#         for s in remove_list:
-#             ws_list.remove(s)
-#             for channel_sig in channel_dict.keys():
-#                 channel_obj = channel_dict[channel_sig]
-#                 #print("user remove len (BEFORE):" + str(len(channel_obj.users)))
-#                 if s in channel_obj.users:
-#                     channel_obj.users.remove(s)
-#                 #print("user remove len (AFTER):" + str(len(channel_obj.users)))
-#
-#         dict_keys = copy.copy(list(channel_dict.keys()))
-#         for ch_key in dict_keys:
-#             channel_dict[ch_key].dispose_if_empty()
-#         print("finished clean_disconnected_client_ws_objs_and_channels")
-#     except Exception as e:
-#         print(e)
+def clean_disconnected_client_ws_objs_and_channels():
+    global ws_list
+    global channel_dict
+
+    try:
+        remove_list = []
+        for s in ws_list:
+            try:
+                s.send("check_alive_msg")
+            except:
+                # Possibility to execute code when connection is closed
+                print("disconnected client found.")
+                #traceback.print_exc()
+                remove_list.append(s)
+                #next
+        for s in remove_list:
+            ws_list.remove(s)
+            for channel_sig in channel_dict.keys():
+                channel_obj = channel_dict[channel_sig]
+                #print("user remove len (BEFORE):" + str(len(channel_obj.users)))
+                if s in channel_obj.users:
+                    channel_obj.users.remove(s)
+                #print("user remove len (AFTER):" + str(len(channel_obj.users)))
+
+        dict_keys = copy.copy(list(channel_dict.keys()))
+        for ch_key in dict_keys:
+            channel_dict[ch_key].dispose_if_empty()
+        print("finished clean_disconnected_client_ws_objs_and_channels")
+    except Exception as e:
+        print(e)
 
 def signaling_app(environ, start_response):
-    #clean_disconnected_client_ws_objs_and_channels()
+    clean_disconnected_client_ws_objs_and_channels()
     try:
         path = environ["PATH_INFO"]
         if path == "/":

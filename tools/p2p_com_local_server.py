@@ -279,7 +279,7 @@ async def sender_server_handler(reader, writer):
             if rcvmsg == None or len(rcvmsg) == 0:
                 if len(byte_buf) > 0:
                     await sender_fifo_q.put(byte_buf)
-                    testing_byte_buf = b''
+                    byte_buf = b''
                 print("break")
                 await sender_fifo_q.put(str("finished"))
                 break
@@ -355,8 +355,9 @@ async def receiver_server_handler(reader, writer):
                 print("response of joined_members_sub: " + message)
                 splited = message.split(":")
                 member_num = int(splited[1])
-                if member_num >= 2:
+                if member_num >= 1:
                     is_remote_node_exists_on_my_send_room = True
+                    setup_ws_sub_sender()
                     print("new client connected")
                 else:
                     await asyncio.sleep(3)
@@ -405,24 +406,24 @@ async def receiver_server_handler(reader, writer):
                 #if(writer.transport.is_closing() == True):
                 print("client is_closing:" + str(writer.transport.is_closing()))
 
-                # check client alive
-                read_data = await reader.read(1024)
-                if read_data == None or len(read_data) == 0:
-                    print("break because client disconnected")
-                    break
+                # # check client alive
+                # read_data = await reader.read(1024)
+                # if read_data == None or len(read_data) == 0:
+                #     print("break because client disconnected")
+                #     break
 
-                # if len(data) == 8: # maybe "finished message"
-                #     decoded_str = None
-                #     try:
-                #         decoded_str = data.decode()
-                #     except:
-                #         traceback.print_exc()
-                #
-                #     if decoded_str == "finished":
-                #         await asyncio.sleep(3)
-                #         writer.transport.close()
-                #         print("break because client disconnected")
-                #         break
+                if len(data) == 8: # maybe "finished message"
+                    decoded_str = None
+                    try:
+                        decoded_str = data.decode()
+                    except:
+                        traceback.print_exc()
+
+                    if decoded_str == "finished":
+                        await asyncio.sleep(3)
+                        writer.transport.close()
+                        print("break because client disconnected")
+                        break
 
                 await writer.drain()
             await asyncio.sleep(0.01)
@@ -573,7 +574,6 @@ if __name__ == '__main__':
         # ice_state_th = threading.Thread(target=ice_establishment_state)
         # ice_state_th.start()
         #
-        setup_ws_sub_sender()
 
         # this feature inner syori is nazo, so not use event loop
         ws_sub_recv_th = threading.Thread(target=ws_sub_receiver)
@@ -583,12 +583,14 @@ if __name__ == '__main__':
         #ws_sub_recv_loop.run(ws_sub_receiver())
         #print("after ws_sub_recv_loop.run")
 
-        # if args.role == 'send':
+        if args.role == 'send':
+            setup_ws_sub_sender()
         #     #fp = open(args.filename, 'rb')
         #     sender_th = threading.Thread(target=sender_server)
         #     sender_th.start()
         #     coro = run_offer(pc, signaling)
-        # else:
+        else:
+            pass
         #     #fp = open(args.filename, 'wb')
         #     receiver_th = threading.Thread(target=receiver_server)
         #     receiver_th.start()
