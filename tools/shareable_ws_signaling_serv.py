@@ -58,7 +58,11 @@ def accept_and_later_msg_handle(environ, start_response):
     global ws_list
     global channel_dict
 
-    ws = environ['wsgi.websocket']
+    ws = None
+    try:
+        ws = environ['wsgi.websocket']
+    except:
+        print("maybe client disconnected.")
     #print('new client connected! member-num =>' + str(len(ws_set)))
     remove_list = []
     while True:
