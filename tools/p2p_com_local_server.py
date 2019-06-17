@@ -123,6 +123,8 @@ async def run_offer(pc, signaling):
             elif cur_num_str != "0":
                 await asyncio.sleep(2)
                 break
+            else:
+                await signaling.close()
 
             #print("wait join of receiver", file=sys.stderr)
             await asyncio.sleep(1)
@@ -367,6 +369,8 @@ async def receiver_server_handler(reader, writer):
                     ws_sender_send_wrapper("join")
                     print("new client connected")
                 else:
+                    send_ws.close()
+                    send_ws = None
                     await asyncio.sleep(3)
                     #ws_sender_send_wrapper("receiver_connected")
                 #time.sleep(3)
