@@ -253,8 +253,10 @@ async def sender_server_handler(reader, writer):
                 if len(byte_buf) > 0:
                     await sender_fifo_q.put(byte_buf)
                     byte_buf = b''
-                print("break")
+                print("break due to EOF or disconnection of client")
                 await sender_fifo_q.put(str("finished"))
+                await asyncio.sleep(2)
+                sender_fifo_q = asyncio.Queue()
                 break
             else:
                 print("put bufferd bytes: " + str(len(byte_buf)), file=sys.stderr)
