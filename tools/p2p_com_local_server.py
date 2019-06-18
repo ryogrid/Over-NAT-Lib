@@ -18,6 +18,7 @@ from signaling_share_ws import add_signaling_arguments, create_signaling
 # application level ws communication
 import websocket
 import traceback
+import socket
 
 sctp_transport_established = False
 force_exited = False
@@ -36,6 +37,8 @@ is_received_client_disconnect_request = False
 
 server_send = None
 server_rcv = None
+
+cur_recv_clientsock = None
 
 async def consume_signaling(pc, signaling):
     global force_exited
@@ -131,7 +134,7 @@ async def run_offer(pc, signaling):
         while True:
             sctp_transport_established = True
             while remote_stdout_connected == False:
-                print("wait remote_std_connected", file=sys.stderr)
+                print("wait remote_stdout_connected", file=sys.stderr)
                 await asyncio.sleep(1)
 
             print("start waiting buffer state is OK", file=sys.stderr)
@@ -210,14 +213,12 @@ def work_as_parent():
 
 async def sender_server_handler(reader, writer):
     global sender_fifo_q
-    #global clientsock
 
     print('Local server writer port waiting for client connections...')
 
     byte_buf = b''
 
     try:
-        #clientsock, client_address = server.accept()
         print("new client connected.")
         # wait remote server is connected with some program
         while remote_stdout_connected == False:
@@ -226,6 +227,13 @@ async def sender_server_handler(reader, writer):
 
         while True:
             rcvmsg = None
+
+            # if flag backed to False, end this handler because it means receiver side client disconnected
+            if remote_stdout_connected == False:
+                # clear bufferd data
+                sender_fifo_q = asyncio.Queue()
+                return
+
             try:
                 rcvmsg = await reader.read(5120)
                 byte_buf = b''.join([byte_buf, rcvmsg])
@@ -268,26 +276,22 @@ async def sender_server():
     async with server_send:
         await server_send.serve_forever()
 
-async def receiver_server_handler(reader, writer):
+
+
+
+async def receiver_server_handler(clientsock):
     global receiver_fifo_q
     global is_remote_node_exists_on_my_send_room
     global is_received_client_disconnect_request
     global send_ws
     global sub_channel_sig
+    global cur_recv_clientsock
 
-    #if not args.target:
-    #    args.target = '0.0.0.0'
-    # server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # server.bind(("127.0.0.1", 10200))
-    # server.listen()
-
-    print('Local server reader port waiting for client connections...')
+    # clear queue for avoiding read left data on queue
+    receiver_fifo_q = asyncio.Queue()
+    is_already_send_receiver_connected = False
     while True:
         try:
-            #clientsock, client_address = server.accept()
-            #print("new client connected.", file=sys.stderr)
-            # wait until remote node join to my send room
-
             while is_remote_node_exists_on_my_send_room == False:
                 send_ws = websocket.create_connection(
                     ws_protcol_str + "://" + args.signaling_host + ":" + str(args.signaling_port) + "/")
@@ -301,13 +305,16 @@ async def receiver_server_handler(reader, writer):
                 if member_num >= 1:
                     is_remote_node_exists_on_my_send_room = True
                     ws_sender_send_wrapper("join")
-                    print("new client connected")
+                    #ws_sender_send_wrapper("receiver_connected")
+                    #print("new client connected")
                 else:
                     send_ws.close()
                     send_ws = None
                     await asyncio.sleep(3)
 
-            ws_sender_send_wrapper("receiver_connected")
+            if is_already_send_receiver_connected == False:
+                ws_sender_send_wrapper("receiver_connected")
+                is_already_send_receiver_connected = True
 
             data = None
             try:
@@ -324,40 +331,87 @@ async def receiver_server_handler(reader, writer):
 
             if data:
                 print("send_data: " + str(len(data)))
-                writer.write(data)
-                print("client is_closing:" + str(writer.transport.is_closing()))
+                clientsock.send(data)
+                #print("client is_closing:" + str(writer.transport.is_closing()))
 
-                if len(data) == 8: # maybe "finished message"
-                    decoded_str = None
-                    try:
-                        decoded_str = data.decode()
-                    except:
-                        traceback.print_exc()
-
-                    if decoded_str == "finished":
-                        await asyncio.sleep(3)
-                        writer.transport.close()
-                        print("break because client disconnected")
-                        break
-
-                await writer.drain()
+                # if len(data) == 8: # maybe "finished message"
+                #     decoded_str = None
+                #     try:
+                #         decoded_str = data.decode()
+                #     except:
+                #         traceback.print_exc()
+                #
+                #     if decoded_str == "finished":
+                #         await asyncio.sleep(3)
+                #         writer.transport.close()
+                #         print("break because client disconnected")
+                #         break
+                # await writer.drain()
             await asyncio.sleep(0.01)
         except:
             traceback.print_exc()
+            print("client disconnected.")
+            try:
+                clientsock.cloe()
+            except:
+                traceback.print_exc()
+            cur_recv_clientsock = None
             ws_sender_send_wrapper("receiver_disconnected")
             break
 
-async def receiver_server():
+# use global variable
+def async_coloutin_loop_run__for_sock_th(clientsock):
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(receiver_server_handler(clientsock))
+
+def receiver_server():
     global server_rcv
-    try:
-        server_rcv = await asyncio.start_server(
-            receiver_server_handler, '127.0.0.1', args.recv_stream_port)
+    global cur_recv_clientsock
+    # try:
+    #     server_rcv = await asyncio.start_server(
+    #         receiver_server_handler, '127.0.0.1', args.recv_stream_port)
+    #
+    # except:
+    #     traceback.print_exc()
+    #
+    # async with server_rcv:
+    #     await server_rcv.serve_forever()
 
-    except:
-        traceback.print_exc()
+    server_rcv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_rcv.bind(("127.0.0.1", args.recv_stream_port))
+    server_rcv.listen()
 
-    async with server_rcv:
-        await server_rcv.serve_forever()
+    while True:
+        if cur_recv_clientsock == None:
+            print('Local server reader port waiting for client connections...')
+        clientsock, client_address = server_rcv.accept()
+        print("new client accepted.")
+
+        # if cur_recv_clientsock == None:
+        #     print("new client connected.")
+        #     cur_recv_clientsock = clientsock
+        # else:
+        #     print("already client exist.")
+        #     print("disconnect accepted connection")
+        #     try:
+        #         clientsock.close()
+        #     except:
+        #         pass
+
+        if cur_recv_clientsock == None:
+            print("new client connected.")
+        else:
+            print("already client exist.")
+            print("disconnect old connection.")
+            try:
+                cur_recv_clientsock.close()
+            except:
+                traceback.print_exc()
+        cur_recv_clientsock = clientsock
+
+        thread = threading.Thread(target=async_coloutin_loop_run__for_sock_th,args=([clientsock]))
+        thread.start()
+
 
 async def send_keep_alive():
     while True:
@@ -440,7 +494,7 @@ async def parallel_by_gather():
     if args.role == 'send':
         cors = [run_offer(pc, signaling), sender_server(), ice_establishment_state(), send_keep_alive()]
     else:
-        cors = [run_answer(pc, signaling), receiver_server(), ice_establishment_state(), send_keep_alive()]
+        cors = [run_answer(pc, signaling), ice_establishment_state(), send_keep_alive()]
     await asyncio.gather(*cors)
     return
 
@@ -479,9 +533,8 @@ if __name__ == '__main__':
         if args.role == 'send':
             setup_ws_sub_sender_for_sender_server()
         else:
-            pass
-        #     receiver_th = threading.Thread(target=receiver_server)
-        #     receiver_th.start()
+            receiver_th = threading.Thread(target=receiver_server)
+            receiver_th.start()
         # #   coro = run_answer(pc, signaling)
 
     loop = None
