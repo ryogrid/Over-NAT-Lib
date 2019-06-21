@@ -55,7 +55,7 @@ def client_loop():
         fileno = sys.stdin.fileno()
         with open(fileno, "rb", closefd=False) as f:
             if args.filename != "":
-                client.snedall("sendfile".encode())
+                client.sendall("sendfile".encode())
                 fname_bytes = len(args.filename.encode())
                 print(fname_bytes)
                 fname = '{0:02d}'.format(fname_bytes)
