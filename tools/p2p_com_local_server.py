@@ -117,6 +117,7 @@ async def run_answer(pc, signaling):
                     fp = open(message.decode(), "wb")
                     file_transfer_mode = True
                     is_checked_filetransfer = True
+                    return
 
             if file_transfer_mode == True:
                 try:
@@ -290,7 +291,7 @@ async def sender_server_handler(reader, writer):
                         await sender_fifo_q.put(rcvmsg)
                         filename_bytes = await reader.read(2)
                         filename_bytes = int(filename_bytes.decode())
-                        await sender_fifo_q.put(rcvmsg)
+                        await sender_fifo_q.put(filename_bytes)
                         print(filename_bytes)
                         filename = await reader.read(filename_bytes)
                         print(filename.decode())
