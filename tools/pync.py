@@ -54,6 +54,12 @@ def client_loop():
 
         fileno = sys.stdin.fileno()
         with open(fileno, "rb", closefd=False) as f:
+            if args.filename != "":
+                client.sned("sendfile".encode())
+                fname_bytes = len(args.filename.encode())
+                print(fname_bytes)
+                client.send(fname_bytes)
+                client.send(args.filename.encode())
             while True:
                 #data = sys.stdin.read()
                 data = f.read(1024)
@@ -111,7 +117,7 @@ parser.add_argument('-c', '--client', help='run as client (sender)', action='sto
 parser.add_argument('-s', '--server', help='listen on [host]:[port] for incoming connections', action='store_true')
 parser.add_argument('-r', '--receiver', help='run as client (receiver)', action='store_true')
 parser.add_argument('-d', '--distributer', help='listen on [host]:[port] for incoming connections and send specified file contents to client', action='store_true')
-parser.add_argument('-f', '--file', default=None, help='distribute file for distributer')
+parser.add_argument('-f', '--filename', default="", help='when send file, specify filename which is used on remote machine (contents uses data from stdin)')
 parser.add_argument('-t', '--target', default="127.0.0.1")
 parser.add_argument('-p', '--port', default=None, type=int, required=True)
 args = parser.parse_args()
