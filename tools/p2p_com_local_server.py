@@ -40,6 +40,7 @@ server_rcv = None
 
 cur_recv_clientsock = None
 file_transfer_mode = False
+file_transfer_phase = 0
 
 async def consume_signaling(pc, signaling):
     global force_exited
@@ -78,14 +79,13 @@ async def run_answer(pc, signaling):
         sctp_transport_established = True
         print("datachannel established")
         is_checked_filetransfer = False
-        file_transfer_phase = 0
         fp = None
 
         @channel.on('message')
         async def on_message(message):
             #nonlocal octets
             nonlocal is_checked_filetransfer
-            nonlocal file_transfer_phase
+            global file_transfer_phase
             global file_transfer_mode
             nonlocal fp
             global receiver_fifo_q
@@ -348,10 +348,12 @@ async def sender_server_handler(reader, writer):
                     await sender_fifo_q.put(byte_buf)
                     byte_buf = b''
                 print("break due to EOF or disconnection of client")
+                # TODO: need lock???
                 await sender_fifo_q.put(str("finished"))
                 await asyncio.sleep(2)
-                is_checked_filetransfer = False
-                sender_fifo_q = asyncio.Queue()
+                #is_checked_filetransfer = False
+                #file_transfer_mode = False
+                #sender_fifo_q = asyncio.Queue()
                 break
             else:
                 print("put bufferd bytes: " + str(len(byte_buf)), file=sys.stderr)
@@ -464,15 +466,6 @@ def async_coloutin_loop_run__for_sock_th(clientsock):
 def receiver_server():
     global server_rcv
     global cur_recv_clientsock
-    # try:
-    #     server_rcv = await asyncio.start_server(
-    #         receiver_server_handler, '127.0.0.1', args.recv_stream_port)
-    #
-    # except:
-    #     traceback.print_exc()
-    #
-    # async with server_rcv:
-    #     await server_rcv.serve_forever()
 
     server_rcv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_rcv.bind(("127.0.0.1", args.recv_stream_port))
@@ -484,17 +477,7 @@ def receiver_server():
         clientsock, client_address = server_rcv.accept()
         print("new client accepted.")
 
-        # if cur_recv_clientsock == None:
-        #     print("new client connected.")
-        #     cur_recv_clientsock = clientsock
-        # else:
-        #     print("already client exist.")
-        #     print("disconnect accepted connection")
-        #     try:
-        #         clientsock.close()
-        #     except:
-        #         pass
-
+        # though there is already communicating client, accept new client
         if cur_recv_clientsock == None:
             print("new client connected.")
         else:

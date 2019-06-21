@@ -1,6 +1,7 @@
 import sys
 import socket
 import argparse
+import traceback
 from io import BufferedRWPair, BufferedWriter, BufferedReader, BytesIO
 
 def server_loop():
@@ -54,7 +55,8 @@ def client_loop():
 
         fileno = sys.stdin.fileno()
         with open(fileno, "rb", closefd=False) as f:
-            if args.filename != "":
+            #if args.filename != "":
+            if len(args.filename) >= 1:
                 client.sendall("sendfile".encode())
                 fname_bytes = len(args.filename.encode())
                 print(fname_bytes)
@@ -88,10 +90,16 @@ def receiver_loop():
             while True:
                 rcvmsg = client.recv(1024)
                 #print('Received -> %s' % (rcvmsg))
-                if len(rcvmsg) == 8 and rcvmsg.decode() == "finished":
-                    f.flush()
-                    client.close()
-                    sys.exit(0)
+                if len(rcvmsg) == 8:
+                    decoded_str = None
+                    try:
+                        decoded_str = rcvmsg.decode()
+                    except:
+                        traceback.print_exc()
+                    if decoded_str == "finished":
+                        f.flush()
+                        client.close()
+                        sys.exit(0)
                 if rcvmsg == None or len(rcvmsg) == 0:
                     # print(rcvmsg, file=sys.stderr)
                     # print('break', file=sys.stderr)
