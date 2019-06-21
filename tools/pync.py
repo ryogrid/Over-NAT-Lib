@@ -95,6 +95,7 @@ def receiver_loop():
                     try:
                         decoded_str = rcvmsg.decode()
                     except:
+                        print(rcvmsg)
                         traceback.print_exc()
                     if decoded_str == "finished":
                         f.flush()

@@ -224,6 +224,7 @@ async def run_offer(pc, signaling):
                             print("notify end of transfer")
                             channel_sender.send(data.encode())
                             file_transfer_mode = False
+                            sendier_fifo_q = asyncio.Queue()
                         else:
                             print("send_data: " + str(len(data)))
                             channel_sender.send(data)
@@ -322,10 +323,12 @@ async def sender_server_handler(reader, writer):
 
         while True:
             # if flag backed to False, end this handler because it means receiver side client disconnected
-            if remote_stdout_connected == False and file_transfer_mode == False:
+            if remote_stdout_connected == False or file_transfer_mode == False:
                 # clear bufferd data
-                sender_fifo_q = asyncio.Queue()
-                return
+                if sender_fifo_q.empty() == False:
+                    print("reset sender_fifo_q because it is not empty")
+                    sender_fifo_q = asyncio.Queue()
+                #return
 
             try:
                 rcvmsg = await reader.read(5120)
@@ -350,7 +353,7 @@ async def sender_server_handler(reader, writer):
                 print("break due to EOF or disconnection of client")
                 # TODO: need lock???
                 await sender_fifo_q.put(str("finished"))
-                await asyncio.sleep(2)
+                #await asyncio.sleep(2)
                 #is_checked_filetransfer = False
                 #file_transfer_mode = False
                 #sender_fifo_q = asyncio.Queue()
@@ -386,9 +389,17 @@ async def receiver_server_handler(clientsock):
     global sub_channel_sig
     global cur_recv_clientsock
 
+    print("new receiver server_handler wake up.")
     # clear queue for avoiding read left data on queue
     receiver_fifo_q = asyncio.Queue()
     is_already_send_receiver_connected = False
+    try:
+        if send_ws:
+            send_ws.close()
+            send_ws = None
+    except:
+        traceback.print_exc()
+
     while True:
         try:
             while is_remote_node_exists_on_my_send_room == False:
