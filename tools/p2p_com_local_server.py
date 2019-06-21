@@ -286,7 +286,8 @@ async def sender_server_handler(reader, writer):
                         pass
                     if decoded_str == "filename":
                         await sender_fifo_q.put(rcvmsg)
-                        filename_bytes = await reader.read(1)
+                        filename_bytes = await reader.read(2)
+                        filename_bytes = int(filename_bytes.decode())
                         await sender_fifo_q.put(rcvmsg)
                         print(filename_bytes)
                         filename = await reader.read(filename_bytes)
