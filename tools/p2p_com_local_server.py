@@ -280,11 +280,13 @@ async def sender_server_handler(reader, writer):
                 rcvmsg = await reader.read(8)
                 decoded_str = None
                 if rcvmsg != None and len(rcvmsg) == 8:
+                    print("head 8byres read")
                     try:
                         decoded_str = rcvmsg.decode()
                     except:
                         pass
                     if decoded_str == "filename":
+                        print("file transfer mode")
                         await sender_fifo_q.put(rcvmsg)
                         filename_bytes = await reader.read(2)
                         filename_bytes = int(filename_bytes.decode())
