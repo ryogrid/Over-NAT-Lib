@@ -101,7 +101,7 @@ async def run_answer(pc, signaling):
                         decoded_str = message.decode()
                     except:
                         pass
-                    if decoded_str == "filename":
+                    if decoded_str == "sendfile":
                         #await receiver_fifo_q.put(message)
                         file_transfer_phase = 1
                         return
@@ -285,7 +285,7 @@ async def sender_server_handler(reader, writer):
                         decoded_str = rcvmsg.decode()
                     except:
                         pass
-                    if decoded_str == "filename":
+                    if decoded_str == "sendfile":
                         print("file transfer mode")
                         await sender_fifo_q.put(rcvmsg)
                         filename_bytes = await reader.read(2)

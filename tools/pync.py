@@ -56,14 +56,11 @@ def client_loop():
         with open(fileno, "rb", closefd=False) as f:
             if args.filename != "":
                 client.sendall("sendfile".encode())
-                client.flush()
                 fname_bytes = len(args.filename.encode())
                 print(fname_bytes)
                 fname = '{0:02d}'.format(fname_bytes)
                 client.sendall(fname.encode())
-                client.flush()
                 client.sendall(args.filename.encode())
-                client.flush()
             while True:
                 #data = sys.stdin.read()
                 data = f.read(1024)
