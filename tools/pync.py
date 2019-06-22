@@ -92,6 +92,7 @@ def receiver_loop():
                     try:
                         decoded_str = rcvmsg.decode()
                     except:
+                        pass
                         #print(rcvmsg, file=sys.stderr)
                         #traceback.print_exc()
                     if decoded_str != None and decoded_str == "finished":
