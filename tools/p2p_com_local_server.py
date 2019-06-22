@@ -161,7 +161,7 @@ async def run_answer(pc, signaling):
                     # say goodbye
                     #await signaling.send(Nne)
                 finally:
-                    queue_lock.acquire()
+                    queue_lock.release()
 
     await signaling.send("join")
     await consume_signaling(pc, signaling)
@@ -296,7 +296,7 @@ async def sender_server_handler(reader, writer):
     global sender_fifo_q
     global file_transfer_mode
     global is_checked_filetransfer
-    global this_sender_handler_id
+    global next_sender_handler_id
     global queue_lock
 
     print('Local server writer port waiting for client connections...')
@@ -396,6 +396,7 @@ async def sender_server_handler(reader, writer):
                 #is_checked_filetransfer = False
                 #file_transfer_mode = False
                 #sender_fifo_q = asyncio.Queue()
+                
                 break
             else:
                 print("put bufferd bytes [" + this_sender_handler_id + "]: " + str(len(byte_buf)), file=sys.stderr)
