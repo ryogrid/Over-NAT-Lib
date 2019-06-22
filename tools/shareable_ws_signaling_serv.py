@@ -220,12 +220,12 @@ if __name__ == '__main__':
                         help='Signaling server offers service port')
     args = parser.parse_args()
 
-    print("Server is running on localhost:10000...")
     server = None
     if args.secure == True:
-        server = pywsgi.WSGIServer(('0.0.0.0', args.port), signaling_app, handler_class=WebSocketHandler,
+        server = pywsgi.WSGIServer(('0.0.0.0', int(args.port)), signaling_app, handler_class=WebSocketHandler,
                                    keyfile='privkey.pem', certfile='fullchain.pem')
     else:
-        server = pywsgi.WSGIServer(('0.0.0.0', 10000), signaling_app, handler_class=WebSocketHandler)
+        server = pywsgi.WSGIServer(('0.0.0.0', int(args.port)), signaling_app, handler_class=WebSocketHandler)
 
+    print("Server is running on localhost: " + str(args.port) + "...")
     server.serve_forever()
