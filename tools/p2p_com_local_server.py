@@ -45,6 +45,10 @@ file_transfer_phase = 0
 next_sender_handler_id = 0
 queue_lock = threading.Lock()
 
+# except header data
+sender_recv_bytes_from_client = 0
+sender_client_eof_or_disconnected = False
+
 async def consume_signaling(pc, signaling):
     global force_exited
     global remote_stdout_connected
@@ -87,19 +91,17 @@ async def run_answer(pc, signaling):
 
         @channel.on('message')
         async def on_message(message):
-            #nonlocal octets
-            nonlocal is_checked_filetransfer
             global file_transfer_phase
             global file_transfer_mode
-            nonlocal fp
             global receiver_fifo_q
             global queue_lock
+            global sender_recv_bytes_from_client
+            nonlocal is_checked_filetransfer
+            nonlocal fp
             nonlocal file_transfer_filename
 
             print("message event fired", file=sys.stderr)
             print("message received from datachannel: " + str(len(message)), file=sys.stderr)
-
-
 
             if is_checked_filetransfer == False:
                 decoded_str = None
@@ -121,10 +123,10 @@ async def run_answer(pc, signaling):
                     try:
                         decoded_str = message.decode()
                         print("filename bytes: " + decoded_str)
+                        file_transfer_phase = 2
+                        return
                     except:
                         traceback.print_exc()
-                    file_transfer_phase = 2
-                    return
 
                 if file_transfer_phase == 2:
                     try:
@@ -146,7 +148,7 @@ async def run_answer(pc, signaling):
                             fp.close()
                             fp = None
                             is_checked_filetransfer = False
-                            file_transfer_phase = False
+                            file_transfer_phase = 0
                             file_transfer_mode = False
                             return
                         else:
@@ -157,9 +159,16 @@ async def run_answer(pc, signaling):
             else:
                 try:
                     if len(message) > 0:
-                        #octets += len(message)
-                        queue_lock.acquire()
-                        await receiver_fifo_q.put(message)
+                        if len(message) == 8 and message.decode() == "finished":
+                            is_checked_filetransfer = False
+                            file_transfer_phase = 0
+                            file_transfer_mode = False
+                            queue_lock.acquire()
+                            await receiver_fifo_q.put(message)
+                            return
+                        else:
+                            queue_lock.acquire()
+                            await receiver_fifo_q.put(message)
                 except:
                     traceback.print_exc()
                     ws_sender_send_wrapper("receiver_disconnected")
@@ -204,9 +213,12 @@ async def run_offer(pc, signaling):
         global file_transfer_mode
         global queue_lock
         global next_sender_handler_id
+        global sender_recv_bytes_from_client
+        global sender_client_eof_or_disconnected
 
         # this line is needed?
         asyncio.set_event_loop(asyncio.new_event_loop())
+        sent_bytes = 0
 
         while True:
             sctp_transport_established = True
@@ -245,18 +257,21 @@ async def run_offer(pc, signaling):
                         if data[0] != (next_sender_handler_id - 1):
                             continue
 
-                        if type(data[1]) is str:
+                        sent_bytes += len(data[1])
+                        print("send_data: " + str(len(data[1])))
+                        channel_sender.send(data[1])
+
+                        # sender_server_handler received data from client are all sent
+                        if sent_bytes == sender_recv_bytes_from_client and sender_client_eof_or_disconnected:
                             print("notify end of transfer")
-                            print("send_data: " + str(len(data[1])))
-                            channel_sender.send(data[1].encode())
+                            channel_sender.send("finished".encode())
                             file_transfer_mode = False
+                            sent_bytes = 0
+                            sender_recv_bytes_from_client = 0
+                            sender_client_eof_or_disconnected = False
                             queue_lock.acquire()
                             sender_fifo_q = asyncio.Queue()
-                            #await clear_queue(sender_fifo_q)
                             queue_lock.release()
-                        else:
-                            print("send_data: " + str(len(data[1])))
-                            channel_sender.send(data[1])
 
                     await asyncio.sleep(0.01)
                 except:
@@ -329,6 +344,8 @@ async def sender_server_handler(reader, writer):
     global is_checked_filetransfer
     global next_sender_handler_id
     global queue_lock
+    global sender_client_eof_or_disconnected
+    global sender_recv_bytes_from_client
 
     print('Local server writer port waiting for client connections...')
 
@@ -373,15 +390,18 @@ async def sender_server_handler(reader, writer):
                             await sender_fifo_q.put([this_sender_handler_id, rcvmsg])
                             file_transfer_mode = True
                             is_checked_filetransfer = True
+                            sender_recv_bytes_from_client += 8 + 2 + filename_bytes
                         except:
                             pass
                         finally:
                             queue_lock.release()
                         continue
                     else:
+                        sender_recv_bytes_from_client += len(rcvmsg)
                         byte_buf = b''.join([byte_buf, rcvmsg])
                         is_checked_filetransfer = True
                 else:
+                    sender_recv_bytes_from_client += len(rcvmsg)
                     byte_buf = b''.join([byte_buf, rcvmsg])
                     is_checked_filetransfer = True
 
@@ -402,6 +422,7 @@ async def sender_server_handler(reader, writer):
                 await asyncio.sleep(3)
             try:
                 rcvmsg = await reader.read(5120)
+                sender_recv_bytes_from_client += len(rcvmsg)
 
                 byte_buf = b''.join([byte_buf, rcvmsg])
                 print("received message from client[" + this_sender_handler_id_str + "]", file=sys.stderr)
@@ -417,15 +438,19 @@ async def sender_server_handler(reader, writer):
 
             #print("len of recvmsg:" + str(len(recvmsg)))
             if rcvmsg == None or len(rcvmsg) == 0:
+                #print(rcvmsg)
                 if len(byte_buf) > 0:
                     queue_lock.acquire()
                     await sender_fifo_q.put([this_sender_handler_id, byte_buf])
                     queue_lock.release()
                     byte_buf = b''
-                print("break due to EOF or disconnection of client[" + this_sender_handler_id_str + "]")
-                queue_lock.acquire()
-                await sender_fifo_q.put([this_sender_handler_id, str("finished")])
-                queue_lock.release()
+                sender_client_eof_or_disconnected = True
+                print("reached EOF or client disconnection [" + this_sender_handler_id_str + "]")
+
+                #queue_lock.acquire()
+                #await sender_fifo_q.put([this_sender_handler_id, str("finished")])
+                #queue_lock.release()
+
                 #await asyncio.sleep(2)
                 #is_checked_filetransfer = False
                 #file_transfer_mode = False

@@ -95,8 +95,9 @@ def receiver_loop():
                     try:
                         decoded_str = rcvmsg.decode()
                     except:
-                        print(rcvmsg)
-                        traceback.print_exc()
+                        #print(rcvmsg, file=sys.stderr)
+                        #traceback.print_exc()
+                        continue
                     if decoded_str == "finished":
                         f.flush()
                         client.close()
