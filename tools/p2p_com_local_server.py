@@ -489,12 +489,12 @@ async def receiver_server_handler(clientsock):
     #await clear_queue(receiver_fifo_q)
     queue_lock.release()
     is_already_send_receiver_connected = False
-    try:
-        if send_ws:
-            send_ws.close()
-            send_ws = None
-    except:
-        traceback.print_exc()
+    # try:
+    #     if send_ws:
+    #         send_ws.close()
+    #         send_ws = None
+    # except:
+    #     traceback.print_exc()
 
     while True:
         try:
@@ -626,8 +626,6 @@ def ws_sub_receiver():
         global remote_stdout_connected
         global remote_stdin_connected
         global done_reading
-        #global clientsock
-        global is_remote_node_exists_on_my_send_room
         global is_received_client_disconnect_request
 
         #print(message,  file=sys.stderr)
