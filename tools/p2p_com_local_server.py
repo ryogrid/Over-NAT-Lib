@@ -44,6 +44,8 @@ file_transfer_phase = 0
 
 next_sender_handler_id = 0
 
+queue_lock = threading.Lock()
+
 async def consume_signaling(pc, signaling):
     global force_exited
     global remote_stdout_connected
@@ -91,6 +93,7 @@ async def run_answer(pc, signaling):
             global file_transfer_mode
             nonlocal fp
             global receiver_fifo_q
+            global queue_lock
 
             print("message event fired", file=sys.stderr)
             print("message received from datachannel: " + str(len(message)), file=sys.stderr)
@@ -150,12 +153,15 @@ async def run_answer(pc, signaling):
                 try:
                     if len(message) > 0:
                         #octets += len(message)
+                        queue_lock.acquire()
                         await receiver_fifo_q.put(message)
                 except:
                     traceback.print_exc()
                     ws_sender_send_wrapper("receiver_disconnected")
                     # say goodbye
-                    #await signaling.send(None)
+                    #await signaling.send(Nne)
+                finally:
+                    queue_lock.acquire()
 
     await signaling.send("join")
     await consume_signaling(pc, signaling)
@@ -191,6 +197,7 @@ async def run_offer(pc, signaling):
         global sender_fifo_q
         global remote_stdout_connected
         global file_transfer_mode
+        global queue_lock
 
         # this line is needed?
         asyncio.set_event_loop(asyncio.new_event_loop())
@@ -210,24 +217,31 @@ async def run_offer(pc, signaling):
             while channel_sender.bufferedAmount <= channel_sender.bufferedAmountLowThreshold:
                 try:
                     data = None
+                    is_empty = False
                     try:
+                        queue_lock.acquire()
                         is_empty = sender_fifo_q.empty()
                         print("queue is empty? at send_data_inner: " + str(is_empty), file=sys.stderr)
                         if is_empty != True:
                             print("queue object id" + str(id(sender_fifo_q)))
                             data = await sender_fifo_q.get()
-                        else:
-                            await asyncio.sleep(1)
-                            continue
                     except:
                         traceback.print_exc()
+                    finally:
+                        queue_lock.release()
+
+                    if is_empty == True:
+                         await asyncio.sleep(1)
+                         continue
 
                     if data:
                         if type(data) is str:
                             print("notify end of transfer")
                             channel_sender.send(data.encode())
                             file_transfer_mode = False
+                            queue_lock.acquire()
                             sendier_fifo_q = asyncio.Queue()
+                            queue_lock.release()
                         else:
                             print("send_data: " + str(len(data)))
                             channel_sender.send(data)
@@ -283,6 +297,7 @@ async def sender_server_handler(reader, writer):
     global file_transfer_mode
     global is_checked_filetransfer
     global this_sender_handler_id
+    global queue_lock
 
     print('Local server writer port waiting for client connections...')
 
@@ -291,11 +306,14 @@ async def sender_server_handler(reader, writer):
     rcvmsg = None
 
     # reset not to send old client wrote data
+    queue_lock.acquire()
     sender_fifo_q = asyncio.Queue()
-    this_sender_handler_id = str(next_sender_handler_id++)
+    queue_lock.release()
+    this_sender_handler_id = str(next_sender_handler_id)
+    next_sender_handler_id += 1
     try:
         print("new client connected.")
-        print("wake up new sender_server_handler [" + str(this_sender_handler_id)  +"]")
+        print("wake up new sender_server_handler [" + str(this_sender_handler_id)  + "]")
         # wait remote server is connected with some program
         while remote_stdout_connected == False and file_transfer_mode == False:
             print("wait remote_stdout_connected", file=sys.stderr)
@@ -309,17 +327,23 @@ async def sender_server_handler(reader, writer):
                     except:
                         pass
                     if decoded_str == "sendfile":
-                        print("file transfer mode [" + this_sender_handler_id + "]")
-                        await sender_fifo_q.put(rcvmsg)
-                        rcvmsg = await reader.read(2)
-                        filename_bytes = int(rcvmsg.decode())
-                        await sender_fifo_q.put(rcvmsg)
-                        print(filename_bytes)
-                        filename = await reader.read(filename_bytes)
-                        print(filename.decode())
-                        await sender_fifo_q.put(filename)
-                        file_transfer_mode = True
-                        is_checked_filetransfer = True
+                        try:
+                            print("file transfer mode [" + this_sender_handler_id + "]")
+                            queue_lock.acquire()
+                            await sender_fifo_q.put(rcvmsg)
+                            rcvmsg = await reader.read(2)
+                            filename_bytes = int(rcvmsg.decode())
+                            await sender_fifo_q.put(rcvmsg)
+                            print(filename_bytes)
+                            filename = await reader.read(filename_bytes)
+                            print(filename.decode())
+                            await sender_fifo_q.put(filename)
+                            file_transfer_mode = True
+                            is_checked_filetransfer = True
+                        except:
+                            pass
+                        finally:
+                            queue_lock.release()
                         continue
                     else:
                         byte_buf = b''.join([byte_buf, rcvmsg])
@@ -338,9 +362,10 @@ async def sender_server_handler(reader, writer):
                 #     print("reset sender_fifo_q because it is not empty")
                 #     sender_fifo_q = asyncio.Queue()
                 #return
+                queue_lock.acquire()
                 sender_fifo_q = asyncio.Queue()
+                queue_lock.release()
                 await asyncio.sleep(3)
-
             try:
                 rcvmsg = await reader.read(5120)
 
@@ -359,18 +384,24 @@ async def sender_server_handler(reader, writer):
             #print("len of recvmsg:" + str(len(recvmsg)))
             if rcvmsg == None or len(rcvmsg) == 0:
                 if len(byte_buf) > 0:
+                    queue_lock.acquire()
                     await sender_fifo_q.put(byte_buf)
+                    queue_lock.release()
                     byte_buf = b''
                 print("break due to EOF or disconnection of client[" + this_sender_handler_id + "]")
+                queue_lock.acquire()
                 await sender_fifo_q.put(str("finished"))
+                queue_lock.release()
                 #await asyncio.sleep(2)
                 #is_checked_filetransfer = False
                 #file_transfer_mode = False
                 #sender_fifo_q = asyncio.Queue()
                 break
             else:
-                print("put bufferd bytes [" + this_sender_handler_id + "]": " + str(len(byte_buf)), file=sys.stderr)
+                print("put bufferd bytes [" + this_sender_handler_id + "]: " + str(len(byte_buf)), file=sys.stderr)
+                queue_lock.acquire()
                 await sender_fifo_q.put(byte_buf)
+                queue_lock.release()
                 byte_buf = b''
             await asyncio.sleep(0.01)
     except:
@@ -389,8 +420,6 @@ async def sender_server():
         await server_send.serve_forever()
 
 
-
-
 async def receiver_server_handler(clientsock):
     global receiver_fifo_q
     global is_remote_node_exists_on_my_send_room
@@ -401,7 +430,9 @@ async def receiver_server_handler(clientsock):
 
     print("new receiver server_handler wake up.")
     # clear queue for avoiding read left data on queue
+    queue_lock.acquire()
     receiver_fifo_q = asyncio.Queue()
+    queue_lock.release()
     is_already_send_receiver_connected = False
     try:
         if send_ws:
@@ -437,17 +468,22 @@ async def receiver_server_handler(clientsock):
                 is_already_send_receiver_connected = True
 
             data = None
+            is_empty = False
             try:
+                queue_lock.acquire()
                 is_empty = receiver_fifo_q.empty()
                 print("queue is empty? at receiver_server_handler: " + str(is_empty), file=sys.stderr)
                 if is_empty != True:
                     data = await receiver_fifo_q.get()
-                else:
-                    await asyncio.sleep(1)
-                print("got get data from queue", file=sys.stderr)
+                    print("got get data from queue", file=sys.stderr)
             except:
                 traceback.print_exc()
                 break
+            finally:
+                queue_lock.release()
+
+            if is_empty == False:
+                await asyncio.sleep(1)
 
             if data:
                 print("send_data: " + str(len(data)))
