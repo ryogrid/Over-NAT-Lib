@@ -42,6 +42,8 @@ cur_recv_clientsock = None
 file_transfer_mode = False
 file_transfer_phase = 0
 
+next_sender_handler_id = 0
+
 async def consume_signaling(pc, signaling):
     global force_exited
     global remote_stdout_connected
@@ -212,6 +214,7 @@ async def run_offer(pc, signaling):
                         is_empty = sender_fifo_q.empty()
                         print("queue is empty? at send_data_inner: " + str(is_empty), file=sys.stderr)
                         if is_empty != True:
+                            print("queue object id" + str(id(sender_fifo_q)))
                             data = await sender_fifo_q.get()
                         else:
                             await asyncio.sleep(1)
@@ -279,6 +282,7 @@ async def sender_server_handler(reader, writer):
     global sender_fifo_q
     global file_transfer_mode
     global is_checked_filetransfer
+    global this_sender_handler_id
 
     print('Local server writer port waiting for client connections...')
 
@@ -288,8 +292,10 @@ async def sender_server_handler(reader, writer):
 
     # reset not to send old client wrote data
     sender_fifo_q = asyncio.Queue()
+    this_sender_handler_id = str(next_sender_handler_id++)
     try:
         print("new client connected.")
+        print("wake up new sender_server_handler [" + str(this_sender_handler_id)  +"]")
         # wait remote server is connected with some program
         while remote_stdout_connected == False and file_transfer_mode == False:
             print("wait remote_stdout_connected", file=sys.stderr)
@@ -303,7 +309,7 @@ async def sender_server_handler(reader, writer):
                     except:
                         pass
                     if decoded_str == "sendfile":
-                        print("file transfer mode")
+                        print("file transfer mode [" + this_sender_handler_id + "]")
                         await sender_fifo_q.put(rcvmsg)
                         rcvmsg = await reader.read(2)
                         filename_bytes = int(rcvmsg.decode())
@@ -339,7 +345,7 @@ async def sender_server_handler(reader, writer):
                 rcvmsg = await reader.read(5120)
 
                 byte_buf = b''.join([byte_buf, rcvmsg])
-                print("received message from client", file=sys.stderr)
+                print("received message from client[" + this_sender_handler_id + "]", file=sys.stderr)
                 print(len(rcvmsg), file=sys.stderr)
 
                 # block sends until bufferd data amount is gleater than 100KB
@@ -355,7 +361,7 @@ async def sender_server_handler(reader, writer):
                 if len(byte_buf) > 0:
                     await sender_fifo_q.put(byte_buf)
                     byte_buf = b''
-                print("break due to EOF or disconnection of client")
+                print("break due to EOF or disconnection of client[" + this_sender_handler_id + "]")
                 await sender_fifo_q.put(str("finished"))
                 #await asyncio.sleep(2)
                 #is_checked_filetransfer = False
@@ -363,7 +369,7 @@ async def sender_server_handler(reader, writer):
                 #sender_fifo_q = asyncio.Queue()
                 break
             else:
-                print("put bufferd bytes: " + str(len(byte_buf)), file=sys.stderr)
+                print("put bufferd bytes [" + this_sender_handler_id + "]": " + str(len(byte_buf)), file=sys.stderr)
                 await sender_fifo_q.put(byte_buf)
                 byte_buf = b''
             await asyncio.sleep(0.01)
