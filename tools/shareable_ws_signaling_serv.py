@@ -216,12 +216,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='WebRTC datachannel signaling server with websocket protcol')
     parser.add_argument('--secure',
                         help='Signaling communication is encrypted', action='store_true')
+    parser.add_argument('--port', default=10000,
+                        help='Signaling server offers service port')
     args = parser.parse_args()
 
     print("Server is running on localhost:10000...")
     server = None
     if args.secure == True:
-        server = pywsgi.WSGIServer(('0.0.0.0', 10000), signaling_app, handler_class=WebSocketHandler,
+        server = pywsgi.WSGIServer(('0.0.0.0', args.port), signaling_app, handler_class=WebSocketHandler,
                                    keyfile='privkey.pem', certfile='fullchain.pem')
     else:
         server = pywsgi.WSGIServer(('0.0.0.0', 10000), signaling_app, handler_class=WebSocketHandler)
