@@ -323,7 +323,7 @@ async def sender_server_handler(reader, writer):
 
         while True:
             # if flag backed to False, end this handler because it means receiver side client disconnected
-            if remote_stdout_connected == False or file_transfer_mode == False:
+            if remote_stdout_connected == False and file_transfer_mode == False:
                 # clear bufferd data
                 if sender_fifo_q.empty() == False:
                     print("reset sender_fifo_q because it is not empty")
