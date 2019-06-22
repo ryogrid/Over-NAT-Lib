@@ -64,7 +64,7 @@ def client_loop():
                 client.sendall(fname.encode())
                 client.sendall(args.filename.encode())
             while True:
-                data = f.read(1024)
+                data = f.read(4096)
                 if data == None or len(data) == 0:
                     break
                 else:
@@ -85,7 +85,7 @@ def receiver_loop():
         fileno = sys.stdout.fileno()
         with open(fileno, "wb", closefd=False) as f:
             while True:
-                rcvmsg = client.recv(1024)
+                rcvmsg = client.recv(4096)
                 #print('Received -> %s' % (rcvmsg))
                 if len(rcvmsg) == 8:
                     decoded_str = None
