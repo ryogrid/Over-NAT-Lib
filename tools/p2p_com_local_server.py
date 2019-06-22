@@ -163,10 +163,12 @@ async def run_answer(pc, signaling):
                             is_checked_filetransfer = False
                             file_transfer_phase = 0
                             file_transfer_mode = False
+                            print("put data to queue: " + str(len(message)))
                             queue_lock.acquire()
                             await receiver_fifo_q.put(message)
                             return
                         else:
+                            print("put data to queue: " + str(len(message)))
                             queue_lock.acquire()
                             await receiver_fifo_q.put(message)
                 except:
@@ -259,6 +261,7 @@ async def run_offer(pc, signaling):
 
                         sent_bytes += len(data[1])
                         print("send_data: " + str(len(data[1])))
+                        sys.stdout.flush()
                         channel_sender.send(data[1])
 
                         # sender_server_handler received data from client are all sent
@@ -269,6 +272,7 @@ async def run_offer(pc, signaling):
                             sent_bytes = 0
                             sender_recv_bytes_from_client = 0
                             sender_client_eof_or_disconnected = False
+                            remote_stdout_connected = False
                             queue_lock.acquire()
                             sender_fifo_q = asyncio.Queue()
                             queue_lock.release()
@@ -446,17 +450,6 @@ async def sender_server_handler(reader, writer):
                     byte_buf = b''
                 sender_client_eof_or_disconnected = True
                 print("reached EOF or client disconnection [" + this_sender_handler_id_str + "]")
-
-                #queue_lock.acquire()
-                #await sender_fifo_q.put([this_sender_handler_id, str("finished")])
-                #queue_lock.release()
-
-                #await asyncio.sleep(2)
-                #is_checked_filetransfer = False
-                #file_transfer_mode = False
-                #sender_fifo_q = asyncio.Queue()
-
-                #break
                 return
             else:
                 print("put bufferd bytes [" + this_sender_handler_id_str + "]: " + str(len(byte_buf)), file=sys.stderr)
