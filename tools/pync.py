@@ -64,16 +64,13 @@ def client_loop():
                 client.sendall(fname.encode())
                 client.sendall(args.filename.encode())
             while True:
-                #data = sys.stdin.read()
                 data = f.read(1024)
-                print(len(data))
                 if data == None or len(data) == 0:
                     break
                 else:
                     ret = client.sendall(data)
-                    print("ret of sendall:" +  str(ret))
+                    print("send: " + str(len(data)))
 
-                    #client.send(data.encode())
     except Exception as e:
         print(e)
         print('Exception! Exiting.')
@@ -97,8 +94,7 @@ def receiver_loop():
                     except:
                         #print(rcvmsg, file=sys.stderr)
                         #traceback.print_exc()
-                        continue
-                    if decoded_str == "finished":
+                    if decoded_str != None and decoded_str == "finished":
                         f.flush()
                         client.close()
                         sys.exit(0)
