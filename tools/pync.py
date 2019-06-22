@@ -98,10 +98,10 @@ def receiver_loop():
                         f.flush()
                         client.close()
                         sys.exit(0)
-                if rcvmsg == None or len(rcvmsg) == 0:
+                    if rcvmsg == None or len(rcvmsg) == 0:
+                        break
                     # print(rcvmsg, file=sys.stderr)
                     # print('break', file=sys.stderr)
-                    break
                 else:
                     f.write(rcvmsg)
     except Exception as e:
