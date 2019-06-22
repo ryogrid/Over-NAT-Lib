@@ -240,7 +240,8 @@ async def run_offer(pc, signaling):
                             channel_sender.send(data.encode())
                             file_transfer_mode = False
                             queue_lock.acquire()
-                            sendier_fifo_q = asyncio.Queue()
+                            #sender_fifo_q = asyncio.Queue()
+                            await clear_queue(sender_fifo_q)
                             queue_lock.release()
                         else:
                             print("send_data: " + str(len(data)))
@@ -292,6 +293,16 @@ def ws_sender_recv_wrapper():
 def work_as_parent():
     pass
 
+async def clear_queue(queue_obj):
+    global queue_lock
+
+    queue_lock.acquire()
+    while queue_obj.empty() == False:
+        queue_obj.get()
+        await asyncio.sleep(0.01)
+
+    queue_lock.release()
+
 async def sender_server_handler(reader, writer):
     global sender_fifo_q
     global file_transfer_mode
@@ -307,7 +318,8 @@ async def sender_server_handler(reader, writer):
 
     # reset not to send old client wrote data
     queue_lock.acquire()
-    sender_fifo_q = asyncio.Queue()
+    #sender_fifo_q = asyncio.Queue()
+    await clear_queue(sender_fifo_q)
     queue_lock.release()
     this_sender_handler_id = str(next_sender_handler_id)
     next_sender_handler_id += 1
@@ -363,7 +375,8 @@ async def sender_server_handler(reader, writer):
                 #     sender_fifo_q = asyncio.Queue()
                 #return
                 queue_lock.acquire()
-                sender_fifo_q = asyncio.Queue()
+                #sender_fifo_q = asyncio.Queue()
+                await clear_queue(sender_fifo_q)
                 queue_lock.release()
                 await asyncio.sleep(3)
             try:
@@ -396,8 +409,9 @@ async def sender_server_handler(reader, writer):
                 #is_checked_filetransfer = False
                 #file_transfer_mode = False
                 #sender_fifo_q = asyncio.Queue()
-                
-                break
+
+                #break
+                return
             else:
                 print("put bufferd bytes [" + this_sender_handler_id + "]: " + str(len(byte_buf)), file=sys.stderr)
                 queue_lock.acquire()
@@ -432,7 +446,8 @@ async def receiver_server_handler(clientsock):
     print("new receiver server_handler wake up.")
     # clear queue for avoiding read left data on queue
     queue_lock.acquire()
-    receiver_fifo_q = asyncio.Queue()
+    #receiver_fifo_q = asyncio.Queue()
+    await clear_queue(receiver_fifo_q)
     queue_lock.release()
     is_already_send_receiver_connected = False
     try:
@@ -479,7 +494,8 @@ async def receiver_server_handler(clientsock):
                     print("got get data from queue", file=sys.stderr)
             except:
                 traceback.print_exc()
-                break
+                #break
+                return
             finally:
                 queue_lock.release()
 
@@ -514,7 +530,8 @@ async def receiver_server_handler(clientsock):
                 traceback.print_exc()
             cur_recv_clientsock = None
             ws_sender_send_wrapper("receiver_disconnected")
-            break
+            #break
+            return
 
 # use global variable
 def async_coloutin_loop_run__for_sock_th(clientsock):
