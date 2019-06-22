@@ -362,6 +362,7 @@ async def sender_server_handler(reader, writer):
     sender_fifo_q = asyncio.Queue()
     #await clear_queue(sender_fifo_q)
     queue_lock.release()
+
     this_sender_handler_id = next_sender_handler_id
     this_sender_handler_id_str = str(this_sender_handler_id)
     next_sender_handler_id += 1
@@ -481,14 +482,20 @@ async def receiver_server_handler(clientsock):
     global send_ws
     global sub_channel_sig
     global cur_recv_clientsock
+    global next_sender_handler_id
 
-    print("new receiver server_handler wake up.")
+    this_sender_handler_id = next_sender_handler_id
+    this_sender_handler_id_str = str(this_sender_handler_id)
+    next_sender_handler_id += 1
+
+    print("new receiver server_handler wake up [" + this_sender_handler_id_str + "]")
     # clear queue for avoiding read left data on queue
     queue_lock.acquire()
     receiver_fifo_q = asyncio.Queue()
     #await clear_queue(receiver_fifo_q)
     queue_lock.release()
     is_already_send_receiver_connected = False
+
     # try:
     #     if send_ws:
     #         send_ws.close()
@@ -527,10 +534,10 @@ async def receiver_server_handler(clientsock):
             try:
                 queue_lock.acquire()
                 is_empty = receiver_fifo_q.empty()
-                print("queue is empty? at receiver_server_handler: " + str(is_empty), file=sys.stderr)
+                print("queue is empty? at receiver_server_handler [" + this_sender_handler_id_str + "]: " + str(is_empty), file=sys.stderr)
                 if is_empty != True:
                     data = await receiver_fifo_q.get()
-                    print("got get data from queue", file=sys.stderr)
+                    print("got get data from queue[" + this_sender_handler_id_str + "]", file=sys.stderr)
             except:
                 traceback.print_exc()
                 #break
@@ -542,18 +549,20 @@ async def receiver_server_handler(clientsock):
                 await asyncio.sleep(1)
 
             if data:
-                print("send_data: " + str(len(data)))
+                print("send_data [" + this_sender_handler_id_str + "]: " + str(len(data)))
                 clientsock.send(data)
                 #print("client is_closing:" + str(writer.transport.is_closing()))
 
-                # if len(data) == 8: # maybe "finished message"
-                #     decoded_str = None
-                #     try:
-                #         decoded_str = data.decode()
-                #     except:
-                #         traceback.print_exc()
-                #
-                #     if decoded_str == "finished":
+                if len(data) == 8: # maybe "finished message"
+                    decoded_str = None
+                    try:
+                        decoded_str = data.decode()
+                    except:
+                        continue
+                        #traceback.print_exc()
+
+                    if decoded_str == "finished":
+                        return
                 #         await asyncio.sleep(3)
                 #         writer.transport.close()
                 #         print("break because client disconnected")
@@ -561,16 +570,18 @@ async def receiver_server_handler(clientsock):
                 # await writer.drain()
             await asyncio.sleep(0.01)
         except:
+            print(type(clientsock))
+            print(clientsock)
             traceback.print_exc()
-            print("client disconnected.")
-            try:
-                clientsock.cloe()
-            except:
-                traceback.print_exc()
-            cur_recv_clientsock = None
-            ws_sender_send_wrapper("receiver_disconnected")
+            print("client disconnected.[" + this_sender_handler_id_str + "]")
+            # try:
+            #     clientsock.cloe()
+            # except:
+            #     traceback.print_exc()
+            # cur_recv_clientsock = None
+            #ws_sender_send_wrapper("receiver_disconnected")
             #break
-            return
+            #return
 
 # use global variable
 def async_coloutin_loop_run__for_sock_th(clientsock):
