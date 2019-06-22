@@ -285,6 +285,9 @@ async def sender_server_handler(reader, writer):
     byte_buf = b''
     is_checked_filetransfer = False
     rcvmsg = None
+
+    # reset not to send old client wrote data
+    sender_fifo_q = asyncio.Queue()
     try:
         print("new client connected.")
         # wait remote server is connected with some program
@@ -325,10 +328,12 @@ async def sender_server_handler(reader, writer):
             # if flag backed to False, end this handler because it means receiver side client disconnected
             if remote_stdout_connected == False and file_transfer_mode == False:
                 # clear bufferd data
-                if sender_fifo_q.empty() == False:
-                    print("reset sender_fifo_q because it is not empty")
-                    sender_fifo_q = asyncio.Queue()
+                # if sender_fifo_q.empty() == False:
+                #     print("reset sender_fifo_q because it is not empty")
+                #     sender_fifo_q = asyncio.Queue()
                 #return
+                sender_fifo_q = asyncio.Queue()
+                await asyncio.sleep(3)
 
             try:
                 rcvmsg = await reader.read(5120)
@@ -351,7 +356,6 @@ async def sender_server_handler(reader, writer):
                     await sender_fifo_q.put(byte_buf)
                     byte_buf = b''
                 print("break due to EOF or disconnection of client")
-                # TODO: need lock???
                 await sender_fifo_q.put(str("finished"))
                 #await asyncio.sleep(2)
                 #is_checked_filetransfer = False
