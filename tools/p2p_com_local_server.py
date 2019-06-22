@@ -19,6 +19,8 @@ from signaling_share_ws import add_signaling_arguments, create_signaling
 import websocket
 import traceback
 import socket
+import random
+import string
 
 sctp_transport_established = False
 force_exited = False
@@ -48,6 +50,14 @@ queue_lock = threading.Lock()
 # except header data
 sender_recv_bytes_from_client = 0
 sender_client_eof_or_disconnected = False
+
+def getRandomID(length):
+    # 英数字をすべて取得
+    dat = string.digits + string.digits + string.digits + \
+            string.ascii_lowercase + string.ascii_uppercase
+
+    # 英数字からランダムに取得
+    return ''.join([random.choice(dat) for times in range(length)])
 
 async def consume_signaling(pc, signaling):
     global force_exited
@@ -703,8 +713,8 @@ async def parallel_by_gather():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Data channel file transfer')
-    parser.add_argument('hierarchy', choices=['parent', 'child'])
-    parser.add_argument('gid')
+    #parser.add_argument('hierarchy', choices=['parent', 'child'])
+    parser.add_argument('gid', default="", help="unique ID which should be shared by two users of p2p transport (if not specified, this program generate appropriate one)")
     parser.add_argument('--role', choices=['send', 'receive'])
     parser.add_argument('--verbose', '-v', action='count')
     parser.add_argument('--send-stream-port', default=10100,
@@ -713,6 +723,15 @@ if __name__ == '__main__':
                         help='This local server make datachannel stream readable at this port')
     add_signaling_arguments(parser)
     args = parser.parse_args()
+
+    if args.gid == "please_gen":
+        args.gid = getRandomID(10)
+        print("generated unique ID " + args.gid + ". you should share this with the other side user.")
+        sys.exit(0)
+
+    if len(args.gid) < 10:
+        print("gid should have length at least 10 characters. I suggest use " + getRandomID(10))
+        sys.exit(0)
 
     colo = None
     if args.verbose:
@@ -723,7 +742,7 @@ if __name__ == '__main__':
     if args.secure_signaling == True:
         ws_protcol_str = "wss"
 
-    if args.hierarchy == 'parent':
+    if False: #args.hierarchy == 'parent':
         colo = work_as_parent()
     else:
         signaling = create_signaling(args)
@@ -735,10 +754,11 @@ if __name__ == '__main__':
 
         if args.role == 'send':
             setup_ws_sub_sender_for_sender_server()
-        else:
+        elif args.role == 'receive':
             receiver_th = threading.Thread(target=receiver_server)
             receiver_th.start()
-        # #   coro = run_answer(pc, signaling)
+        else:
+            print("please pass --role {send|receive} option")
 
     loop = None
     try:
