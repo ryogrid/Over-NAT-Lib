@@ -87,23 +87,25 @@ def receiver_loop():
             while True:
                 rcvmsg = client.recv(4096)
                 #print('Received -> %s' % (rcvmsg))
-                if len(rcvmsg) == 8:
-                    decoded_str = None
-                    try:
-                        decoded_str = rcvmsg.decode()
-                    except:
-                        f.write(rcvmsg)
-                        continue
-                        #print(rcvmsg, file=sys.stderr)
-                        #traceback.print_exc()
-                    if decoded_str != None and decoded_str == "finished":
-                        f.flush()
-                        client.close()
-                        sys.exit(0)
-                    if rcvmsg == None or len(rcvmsg) == 0:
-                        break
-                    # print(rcvmsg, file=sys.stderr)
-                    # print('break', file=sys.stderr)
+                if rcvmsg == None or len(rcvmsg) == 0:
+                    break
+                # if len(rcvmsg) == 8:
+                #     decoded_str = None
+                #     try:
+                #         decoded_str = rcvmsg.decode()
+                #     except:
+                #         f.write(rcvmsg)
+                #         continue
+                #         # print(rcvmsg, file=sys.stderr)
+                #         # traceback.print_exc()
+                #     if decoded_str != None and decoded_str == "finished":
+                #         f.flush()
+                #         client.close()
+                #         sys.exit(0)
+                #     if rcvmsg == None or len(rcvmsg) == 0:
+                #         break
+                #     # print(rcvmsg, file=sys.stderr)
+                #     # print('break', file=sys.stderr)
                 else:
                     f.write(rcvmsg)
     except Exception as e:

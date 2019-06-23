@@ -560,24 +560,30 @@ async def receiver_server_handler(clientsock):
 
             if data:
                 print("send_data [" + this_sender_handler_id_str + "]: " + str(len(data)))
-                clientsock.send(data)
-                #print("client is_closing:" + str(writer.transport.is_closing()))
-
                 if len(data) == 8: # maybe "finished message"
-                    decoded_str = None
+                    decoded_str = ""
                     try:
                         decoded_str = data.decode()
                     except:
-                        continue
-                        #traceback.print_exc()
+                        pass
 
                     if decoded_str == "finished":
+                        clientsock.close()
                         return
-                #         await asyncio.sleep(3)
-                #         writer.transport.close()
-                #         print("break because client disconnected")
-                #         break
-                # await writer.drain()
+
+                clientsock.send(data)
+                #print("client is_closing:" + str(writer.transport.is_closing()))
+
+                # if len(data) == 8: # maybe "finished message"
+                #     decoded_str = None
+                #     try:
+                #         decoded_str = data.decode()
+                #     except:
+                #         continue
+                #         #traceback.print_exc()
+                #
+                #     if decoded_str == "finished":
+                #         return
             await asyncio.sleep(0.01)
         except:
             print(type(clientsock))
