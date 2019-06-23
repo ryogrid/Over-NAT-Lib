@@ -767,12 +767,13 @@ def get_relative_this_script_path():
 
 def keyboard_interrupt_hundler():
     print("Ctrl-C keyboard interrupt received.")
-
-    # if os.name == 'nt':
-    #     signal.signal(signal.CTRL_C_EVENT, keyboard_intruput_hundler)
-    #     sys.exit(0)
-    # else:
-    #     signal.signal(signal.SIGINT, keyboard_intruput_hundler)
+    if args.hierarchy == "parent":
+    if os.name == 'nt':
+        os.Kill(sender_proc.pid, signal.CTRL_C_EVENT)
+        os.Kill(receiver_proc.pid, signal.CTRL_C_EVENT)
+    else:
+        os.Kill(sender_proc.pid, signal.SIGINT)
+        os.Kill(receiver_proc.pid, signal.SIGINT)
 
     print("exit.")
     sys.exit(0)
@@ -818,77 +819,82 @@ if __name__ == '__main__':
     #     signal.signal(signal.SIGINT, keyboard_interrupt_hundler)
 
     colo = None
+    sender_proc = None
+    receiver_proc = None
     if args.hierarchy == 'parent':
-        if args.name != "tom" and args.name != "bob":
-            print("please pass --name argument. accebtable value is \\tom\\ or \\bob\\, which neeed different between communicate users (2users)")
-            sys.exit(0)
+        try:
+            if args.name != "tom" and args.name != "bob":
+                print("please pass --name argument. accebtable value is \\tom\\ or \\bob\\, which neeed different between communicate users (2users)")
+                sys.exit(0)
 
-        sender_cmd_args_list = []
-        receiver_cmd_args_list = []
-        #print(get_relative_this_script_path())
-        # sender_cmd_args_list.append("python")
-        # receiver_cmd_args_list.append("python")
-        # sender_cmd_args_list.append("--version")
-        # receiver_cmd_args_list.append("--version")
-        # sender_cmd_args_list.append("cd")
-        # receiver_cmd_args_list.append("cd")
+            sender_cmd_args_list = []
+            receiver_cmd_args_list = []
+            #print(get_relative_this_script_path())
+            # sender_cmd_args_list.append("python")
+            # receiver_cmd_args_list.append("python")
+            # sender_cmd_args_list.append("--version")
+            # receiver_cmd_args_list.append("--version")
+            # sender_cmd_args_list.append("cd")
+            # receiver_cmd_args_list.append("cd")
 
-        sender_cmd_args_list.append("python")
-        receiver_cmd_args_list.append("python")
-        sender_cmd_args_list.append(get_relative_this_script_path())
-        receiver_cmd_args_list.append(get_relative_this_script_path())
-        sender_cmd_args_list.append("--signaling")
-        receiver_cmd_args_list.append("--signaling")
-        sender_cmd_args_list.append("share-websocket")
-        receiver_cmd_args_list.append("share-websocket")
-        sender_cmd_args_list.append("--signaling-host")
-        receiver_cmd_args_list.append("--signaling-host")
-        sender_cmd_args_list.append(args.signaling_host)
-        receiver_cmd_args_list.append(args.signaling_host)
-        sender_cmd_args_list.append("--signaling-port")
-        receiver_cmd_args_list.append("--signaling-port")
-        sender_cmd_args_list.append(args.signaling_port)
-        receiver_cmd_args_list.append(args.signaling_port)
-        sender_cmd_args_list.append("--role")
-        receiver_cmd_args_list.append("--role")
-        sender_cmd_args_list.append("send")
-        receiver_cmd_args_list.append("receive")
-        if args.secure_signaling:
-            sender_cmd_args_list.append("--secure-signaling")
-            receiver_cmd_args_list.append("--secure-signaling")
-        if args.slide_stream_ports:
-            sender_cmd_args_list.append("--send-stream-port")
-            receiver_cmd_args_list.append("--recv-stream-port")
-            sender_cmd_args_list.append("10101")
-            receiver_cmd_args_list.append("10201")
-        if args.verbose:
-            sender_cmd_args_list.append("-v")
-            receiver_cmd_args_list.append("-v")
-        sender_cmd_args_list.append("--hierarchy")
-        receiver_cmd_args_list.append("--hierarchy")
-        sender_cmd_args_list.append("child")
-        receiver_cmd_args_list.append("child")
-        if(args.name == "tom"):
-            sender_cmd_args_list.append(args.gid + "conn1")
-            receiver_cmd_args_list.append(args.gid + "conn2")
-        else:
-            sender_cmd_args_list.append(args.gid + "conn2")
-            receiver_cmd_args_list.append(args.gid + "conn1")
+            sender_cmd_args_list.append("python")
+            receiver_cmd_args_list.append("python")
+            sender_cmd_args_list.append(get_relative_this_script_path())
+            receiver_cmd_args_list.append(get_relative_this_script_path())
+            sender_cmd_args_list.append("--signaling")
+            receiver_cmd_args_list.append("--signaling")
+            sender_cmd_args_list.append("share-websocket")
+            receiver_cmd_args_list.append("share-websocket")
+            sender_cmd_args_list.append("--signaling-host")
+            receiver_cmd_args_list.append("--signaling-host")
+            sender_cmd_args_list.append(args.signaling_host)
+            receiver_cmd_args_list.append(args.signaling_host)
+            sender_cmd_args_list.append("--signaling-port")
+            receiver_cmd_args_list.append("--signaling-port")
+            sender_cmd_args_list.append(args.signaling_port)
+            receiver_cmd_args_list.append(args.signaling_port)
+            sender_cmd_args_list.append("--role")
+            receiver_cmd_args_list.append("--role")
+            sender_cmd_args_list.append("send")
+            receiver_cmd_args_list.append("receive")
+            if args.secure_signaling:
+                sender_cmd_args_list.append("--secure-signaling")
+                receiver_cmd_args_list.append("--secure-signaling")
+            if args.slide_stream_ports:
+                sender_cmd_args_list.append("--send-stream-port")
+                receiver_cmd_args_list.append("--recv-stream-port")
+                sender_cmd_args_list.append("10101")
+                receiver_cmd_args_list.append("10201")
+            if args.verbose:
+                sender_cmd_args_list.append("-v")
+                receiver_cmd_args_list.append("-v")
+            sender_cmd_args_list.append("--hierarchy")
+            receiver_cmd_args_list.append("--hierarchy")
+            sender_cmd_args_list.append("child")
+            receiver_cmd_args_list.append("child")
+            if(args.name == "tom"):
+                sender_cmd_args_list.append(args.gid + "conn1")
+                receiver_cmd_args_list.append(args.gid + "conn2")
+            else:
+                sender_cmd_args_list.append(args.gid + "conn2")
+                receiver_cmd_args_list.append(args.gid + "conn1")
 
 
-        sender_proc = subprocess.Popen(sender_cmd_args_list, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        sender_stdout_piper_th = threading.Thread(target=stdout_piper_th, daemon=True, args=(["sender_proc", sender_proc]))
-        sender_stdout_piper_th.start()
-        sender_stderr_piper_th = threading.Thread(target=stderr_piper_th, daemon=True, args=(["sender_proc", sender_proc]))
-        sender_stderr_piper_th.start()
+            sender_proc = subprocess.Popen(sender_cmd_args_list, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            sender_stdout_piper_th = threading.Thread(target=stdout_piper_th, daemon=True, args=(["sender_proc", sender_proc]))
+            sender_stdout_piper_th.start()
+            sender_stderr_piper_th = threading.Thread(target=stderr_piper_th, daemon=True, args=(["sender_proc", sender_proc]))
+            sender_stderr_piper_th.start()
 
-        receiver_proc = subprocess.Popen(receiver_cmd_args_list, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        receiver_stdout_piper_th = threading.Thread(target=stdout_piper_th, daemon=True, args=(["recv_proc", receiver_proc]))
-        receiver_stdout_piper_th.start()
-        receiver_stderr_piper_th = threading.Thread(target=stderr_piper_th, daemon=True, args=(["recv_proc", receiver_proc]))
-        receiver_stderr_piper_th.start()
+            receiver_proc = subprocess.Popen(receiver_cmd_args_list, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            receiver_stdout_piper_th = threading.Thread(target=stdout_piper_th, daemon=True, args=(["recv_proc", receiver_proc]))
+            receiver_stdout_piper_th.start()
+            receiver_stderr_piper_th = threading.Thread(target=stderr_piper_th, daemon=True, args=(["recv_proc", receiver_proc]))
+            receiver_stderr_piper_th.start()
 
-        receiver_proc.wait()
+            receiver_proc.wait()
+        except KeyboardInterrupt:
+            keyboard_interrupt_hundler()
     else: #child
         signaling = create_signaling(args)
         pc = RTCPeerConnection()
