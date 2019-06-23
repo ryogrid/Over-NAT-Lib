@@ -8,6 +8,7 @@ import os
 import threading
 import time
 import subprocess
+import signal
 
 #from os import path
 #sys.path.append(path.dirname(path.abspath(__file__)) + "/../../")
@@ -634,7 +635,7 @@ def receiver_server():
                 traceback.print_exc()
         cur_recv_clientsock = clientsock
 
-        thread = threading.Thread(target=async_coloutin_loop_run__for_sock_th,args=([clientsock]))
+        thread = threading.Thread(target=async_coloutin_loop_run__for_sock_th, daemon=True, args=([clientsock]))
         thread.start()
 
 
@@ -764,6 +765,17 @@ def get_relative_this_script_path():
     # else:
     #     return "./" + __file__
 
+def keyboard_interrupt_hundler():
+    print("Ctrl-C keyboard interrupt received.")
+
+    # if os.name == 'nt':
+    #     signal.signal(signal.CTRL_C_EVENT, keyboard_intruput_hundler)
+    #     sys.exit(0)
+    # else:
+    #     signal.signal(signal.SIGINT, keyboard_intruput_hundler)
+
+    print("exit.")
+    sys.exit(0)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Data channel file transfer')
@@ -798,6 +810,12 @@ if __name__ == '__main__':
     ws_protcol_str = "ws"
     if args.secure_signaling == True:
         ws_protcol_str = "wss"
+
+    # register ctrl-c signal handler
+    # if os.name == 'nt':
+    #     signal.signal(signal.CTRL_C_EVENT, keyboard_interrupt_hundler)
+    # else:
+    #     signal.signal(signal.SIGINT, keyboard_interrupt_hundler)
 
     colo = None
     if args.hierarchy == 'parent':
@@ -859,15 +877,15 @@ if __name__ == '__main__':
 
 
         sender_proc = subprocess.Popen(sender_cmd_args_list, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        sender_stdout_piper_th = threading.Thread(target=stdout_piper_th, args=(["sender_proc", sender_proc]))
+        sender_stdout_piper_th = threading.Thread(target=stdout_piper_th, daemon=True, args=(["sender_proc", sender_proc]))
         sender_stdout_piper_th.start()
-        sender_stderr_piper_th = threading.Thread(target=stderr_piper_th, args=(["sender_proc", sender_proc]))
+        sender_stderr_piper_th = threading.Thread(target=stderr_piper_th, daemon=True, args=(["sender_proc", sender_proc]))
         sender_stderr_piper_th.start()
 
         receiver_proc = subprocess.Popen(receiver_cmd_args_list, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        receiver_stdout_piper_th = threading.Thread(target=stdout_piper_th, args=(["recv_proc", receiver_proc]))
+        receiver_stdout_piper_th = threading.Thread(target=stdout_piper_th, daemon=True, args=(["recv_proc", receiver_proc]))
         receiver_stdout_piper_th.start()
-        receiver_stderr_piper_th = threading.Thread(target=stderr_piper_th, args=(["recv_proc", receiver_proc]))
+        receiver_stderr_piper_th = threading.Thread(target=stderr_piper_th, daemon=True, args=(["recv_proc", receiver_proc]))
         receiver_stderr_piper_th.start()
 
         receiver_proc.wait()
@@ -876,10 +894,10 @@ if __name__ == '__main__':
         pc = RTCPeerConnection()
 
         # this feature inner syori is nazo, so not use event loop
-        ws_sub_recv_th = threading.Thread(target=ws_sub_receiver)
+        ws_sub_recv_th = threading.Thread(target=ws_sub_receiver, daemon=True)
         ws_sub_recv_th.start()
 
-        flusher_th = threading.Thread(target=stdout_stderr_flusher_th, args=([1]))
+        flusher_th = threading.Thread(target=stdout_stderr_flusher_th, daemon=True, args=([1]))
         flusher_th.start()
 
         if args.role == 'send':
@@ -887,7 +905,7 @@ if __name__ == '__main__':
             print("This local server is waiting connect request for sending your stream data to remote at " + str(args.send_stream_port) + " port.")
         elif args.role == 'receive':
             print("This local server is waiting connect request for passing stream data from remote to you at " + str(args.recv_stream_port) + " port.")
-            receiver_th = threading.Thread(target=receiver_server)
+            receiver_th = threading.Thread(target=receiver_server, daemon=True)
             receiver_th.start()
         else:
             print("please pass --role {send|receive} option")
@@ -900,14 +918,13 @@ if __name__ == '__main__':
             #     loop = asyncio.ProactorEventLoop()
             # else:
             #     loop = asyncio.get_event_loop()
-            try:
-                #loop.run_until_complete(coro)
-                loop.run_until_complete(parallel_by_gather())
-            except:
-                traceback.print_exc()
-            finally:
-                #fp.close()
-                loop.run_until_complete(pc.close())
-                loop.run_until_complete(signaling.close())
-        except:
-            traceback.print_exc()
+            #loop.run_until_complete(coro)
+            loop.run_until_complete(parallel_by_gather())
+        except KeyboardInterrupt:
+            #traceback.print_exc()
+            keyboard_interrupt_hundler()
+        finally:
+            #fp.close()
+            loop.run_until_complete(pc.close())
+            loop.run_until_complete(signaling.close())
+
