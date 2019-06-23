@@ -4,8 +4,10 @@ import argparse
 import asyncio
 import logging
 import sys
+import os
 import threading
 import time
+import subprocess
 
 #from os import path
 #sys.path.append(path.dirname(path.abspath(__file__)) + "/../../")
@@ -95,6 +97,7 @@ async def run_answer(pc, signaling):
         #octets = 0
         sctp_transport_established = True
         print("datachannel established")
+        sys.stdout.flush()
         is_checked_filetransfer = False
         fp = None
         file_transfer_filename = None
@@ -293,6 +296,7 @@ async def run_offer(pc, signaling):
 
     async def send_data():
         print("datachannel established")
+        sys.stdout.flush()
         await send_data_inner()
 
     #channel_sender.on('bufferedamountlow', send_data)
@@ -644,7 +648,7 @@ def setup_ws_sub_sender_for_sender_server():
     global send_ws
     global sub_channel_sig
     send_ws = websocket.create_connection(ws_protcol_str +  "://" + args.signaling_host + ":" + str(args.signaling_port) + "/")
-    print("sender app level ws opend")
+    print("sender app level ws (2) opend")
     sub_channel_sig = args.gid + "stor"
     ws_sender_send_wrapper("join")
 
@@ -688,7 +692,7 @@ def ws_sub_receiver():
         print("### closed ###")
 
     def on_open(ws):
-        print("receiver app level ws opend")
+        print("app level ws (1) opend")
         try:
             if args.role == 'send':
                 ws.send(args.gid + "rtos_chsig:join")
@@ -717,16 +721,63 @@ async def parallel_by_gather():
     await asyncio.gather(*cors)
     return
 
+def stdout_piper_th(role, proc):
+    fileno = sys.stdout.fileno()
+    with open(fileno, "wb", closefd=False) as stdout_fd:
+        while not proc.poll():
+            stdout_data = proc.stdout.readline()
+            if stdout_data:
+                #sys.stdout.write(stdoutdata.decode())
+                #stdout_fd.write(stdout_data)
+                stdout_fd.write(b''.join([role.encode(), ": ".encode(), stdout_data]))
+                stdout_fd.flush()
+            else:
+                break
+
+def stderr_piper_th(role, proc):
+    fileno = sys.stderr.fileno()
+    with open(fileno, "wb", closefd=False) as stderr_fd:
+        while not proc.poll():
+            stderr_data = proc.stderr.readline()
+            if stderr_data:
+                #sys.stderr.write(stderr_data.decode())
+                stderr_fd.write(b''.join([role.encode(), ": ".encode(), stderr_data]))
+                stderr_fd.flush()
+            else:
+                break
+
+def stdout_stderr_flusher_th(interval_sec):
+    while True:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        time.sleep(interval_sec)
+
+def get_relative_this_script_path():
+    return __file__
+    # if os.name == 'nt':
+    #     tmp_path = os.getcwd() + "\\" + __file__
+    #     return tmp_path[2:]
+    # else:
+    #     return os.getcwd() + "/" + __file__
+    # if os.name == 'nt':
+    #     return ".\\" + __file__
+    # else:
+    #     return "./" + __file__
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Data channel file transfer')
-    #parser.add_argument('hierarchy', choices=['parent', 'child'])
     parser.add_argument('gid', default="", help="unique ID which should be shared by two users of p2p transport (if not specified, this program generate appropriate one)")
+    parser.add_argument('--hierarchy', default="parent", choices=['parent', 'child'])
     parser.add_argument('--role', choices=['send', 'receive'])
+    parser.add_argument('--name', choices=['tom', 'bob'])
     parser.add_argument('--verbose', '-v', action='count')
     parser.add_argument('--send-stream-port', default=10100,
                         help='This local server make datachannel stream readable at this port')
     parser.add_argument('--recv-stream-port', default=10200,
                         help='This local server make datachannel stream readable at this port')
+    parser.add_argument('--slide-stream-ports',
+                        help='When you exec two process on same host, other side process should change streaming port', action='store_true')
     add_signaling_arguments(parser)
     args = parser.parse_args()
 
@@ -739,7 +790,7 @@ if __name__ == '__main__':
         print("gid should have length at least 10 characters. I suggest use " + getRandomID(10))
         sys.exit(0)
 
-    colo = None
+
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
     #websocket.enableTrace(True)
@@ -748,15 +799,88 @@ if __name__ == '__main__':
     if args.secure_signaling == True:
         ws_protcol_str = "wss"
 
-    if False: #args.hierarchy == 'parent':
-        colo = work_as_parent()
-    else:
+    colo = None
+    if args.hierarchy == 'parent':
+        if args.name != "tom" and args.name != "bob":
+            print("please pass --name argument. accebtable value is \\tom\\ or \\bob\\, which neeed different between communicate users (2users)")
+            sys.exit(0)
+
+        sender_cmd_args_list = []
+        receiver_cmd_args_list = []
+        #print(get_relative_this_script_path())
+        # sender_cmd_args_list.append("python")
+        # receiver_cmd_args_list.append("python")
+        # sender_cmd_args_list.append("--version")
+        # receiver_cmd_args_list.append("--version")
+        # sender_cmd_args_list.append("cd")
+        # receiver_cmd_args_list.append("cd")
+
+        sender_cmd_args_list.append("python")
+        receiver_cmd_args_list.append("python")
+        sender_cmd_args_list.append(get_relative_this_script_path())
+        receiver_cmd_args_list.append(get_relative_this_script_path())
+        sender_cmd_args_list.append("--signaling")
+        receiver_cmd_args_list.append("--signaling")
+        sender_cmd_args_list.append("share-websocket")
+        receiver_cmd_args_list.append("share-websocket")
+        sender_cmd_args_list.append("--signaling-host")
+        receiver_cmd_args_list.append("--signaling-host")
+        sender_cmd_args_list.append(args.signaling_host)
+        receiver_cmd_args_list.append(args.signaling_host)
+        sender_cmd_args_list.append("--signaling-port")
+        receiver_cmd_args_list.append("--signaling-port")
+        sender_cmd_args_list.append(args.signaling_port)
+        receiver_cmd_args_list.append(args.signaling_port)
+        sender_cmd_args_list.append("--role")
+        receiver_cmd_args_list.append("--role")
+        sender_cmd_args_list.append("send")
+        receiver_cmd_args_list.append("receive")
+        if args.secure_signaling:
+            sender_cmd_args_list.append("--secure-signaling")
+            receiver_cmd_args_list.append("--secure-signaling")
+        if args.slide_stream_ports:
+            sender_cmd_args_list.append("--send-stream-port")
+            receiver_cmd_args_list.append("--recv-stream-port")
+            sender_cmd_args_list.append("10101")
+            receiver_cmd_args_list.append("10201")
+        if args.verbose:
+            sender_cmd_args_list.append("-v")
+            receiver_cmd_args_list.append("-v")
+        sender_cmd_args_list.append("--hierarchy")
+        receiver_cmd_args_list.append("--hierarchy")
+        sender_cmd_args_list.append("child")
+        receiver_cmd_args_list.append("child")
+        if(args.name == "tom"):
+            sender_cmd_args_list.append(args.gid + "conn1")
+            receiver_cmd_args_list.append(args.gid + "conn2")
+        else:
+            sender_cmd_args_list.append(args.gid + "conn2")
+            receiver_cmd_args_list.append(args.gid + "conn1")
+
+
+        sender_proc = subprocess.Popen(sender_cmd_args_list, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        sender_stdout_piper_th = threading.Thread(target=stdout_piper_th, args=(["sender_proc", sender_proc]))
+        sender_stdout_piper_th.start()
+        sender_stderr_piper_th = threading.Thread(target=stderr_piper_th, args=(["sender_proc", sender_proc]))
+        sender_stderr_piper_th.start()
+
+        receiver_proc = subprocess.Popen(receiver_cmd_args_list, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        receiver_stdout_piper_th = threading.Thread(target=stdout_piper_th, args=(["recv_proc", receiver_proc]))
+        receiver_stdout_piper_th.start()
+        receiver_stderr_piper_th = threading.Thread(target=stderr_piper_th, args=(["recv_proc", receiver_proc]))
+        receiver_stderr_piper_th.start()
+
+        receiver_proc.wait()
+    else: #child
         signaling = create_signaling(args)
         pc = RTCPeerConnection()
 
         # this feature inner syori is nazo, so not use event loop
         ws_sub_recv_th = threading.Thread(target=ws_sub_receiver)
         ws_sub_recv_th.start()
+
+        flusher_th = threading.Thread(target=stdout_stderr_flusher_th, args=([1]))
+        flusher_th.start()
 
         if args.role == 'send':
             setup_ws_sub_sender_for_sender_server()
@@ -768,22 +892,22 @@ if __name__ == '__main__':
         else:
             print("please pass --role {send|receive} option")
 
-    loop = None
-    try:
-        # run event loop
-        loop = asyncio.get_event_loop()
-        # if os.name == 'nt':
-        #     loop = asyncio.ProactorEventLoop()
-        # else:
-        #     loop = asyncio.get_event_loop()
+        loop = None
         try:
-            #loop.run_until_complete(coro)
-            loop.run_until_complete(parallel_by_gather())
+            # run event loop
+            loop = asyncio.get_event_loop()
+            # if os.name == 'nt':
+            #     loop = asyncio.ProactorEventLoop()
+            # else:
+            #     loop = asyncio.get_event_loop()
+            try:
+                #loop.run_until_complete(coro)
+                loop.run_until_complete(parallel_by_gather())
+            except:
+                traceback.print_exc()
+            finally:
+                #fp.close()
+                loop.run_until_complete(pc.close())
+                loop.run_until_complete(signaling.close())
         except:
             traceback.print_exc()
-        finally:
-            #fp.close()
-            loop.run_until_complete(pc.close())
-            loop.run_until_complete(signaling.close())
-    except:
-        traceback.print_exc()
