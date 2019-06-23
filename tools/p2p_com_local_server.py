@@ -760,7 +760,9 @@ if __name__ == '__main__':
 
         if args.role == 'send':
             setup_ws_sub_sender_for_sender_server()
+            print("This local server is waiting connect request for sending your stream data to remote at " + str(args.send_stream_port) + " port.")
         elif args.role == 'receive':
+            print("This local server is waiting connect request for passing stream data from remote to you at " + str(args.recv_stream_port) + " port.")
             receiver_th = threading.Thread(target=receiver_server)
             receiver_th.start()
         else:
