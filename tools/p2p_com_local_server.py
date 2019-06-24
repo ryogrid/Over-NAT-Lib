@@ -766,16 +766,26 @@ def get_relative_this_script_path():
     #     return "./" + __file__
 
 def keyboard_interrupt_hundler():
-    print("Ctrl-C keyboard interrupt received.")
     if args.hierarchy == "parent":
-    if os.name == 'nt':
-        os.Kill(sender_proc.pid, signal.CTRL_C_EVENT)
-        os.Kill(receiver_proc.pid, signal.CTRL_C_EVENT)
-    else:
-        os.Kill(sender_proc.pid, signal.SIGINT)
-        os.Kill(receiver_proc.pid, signal.SIGINT)
+        print("Ctrl-C keyboard interrupt received.")
+        sys.stdout.flush()
 
-    print("exit.")
+        print("exit parent proc.")
+        if os.name == 'nt':
+            os.Kill(sender_proc.pid, signal.CTRL_C_EVENT)
+            os.Kill(receiver_proc.pid, signal.CTRL_C_EVENT)
+        else:
+            os.Kill(sender_proc.pid, signal.SIGINT)
+            os.Kill(receiver_proc.pid, signal.SIGINT)
+        time.sleep(1)
+    else:
+        if args.role == "send":
+            print("exit send proc (child).")
+        else:
+            print("exit recv proc (child).")
+
+    sys.stdout.flush()
+    sys.stderr.flush()
     sys.exit(0)
 
 if __name__ == '__main__':
