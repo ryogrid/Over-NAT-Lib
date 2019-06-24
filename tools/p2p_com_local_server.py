@@ -754,16 +754,10 @@ def stdout_stderr_flusher_th(interval_sec):
         time.sleep(interval_sec)
 
 def get_relative_this_script_path():
-    return __file__
-    # if os.name == 'nt':
-    #     tmp_path = os.getcwd() + "\\" + __file__
-    #     return tmp_path[2:]
-    # else:
-    #     return os.getcwd() + "/" + __file__
-    # if os.name == 'nt':
-    #     return ".\\" + __file__
-    # else:
-    #     return "./" + __file__
+    if os.name == 'nt':
+        return __file__
+    else:
+        return os.getcwd() + "/" + __file__
 
 def keyboard_interrupt_hundler():
     if args.hierarchy == "parent":
@@ -846,9 +840,21 @@ if __name__ == '__main__':
             # receiver_cmd_args_list.append("--version")
             # sender_cmd_args_list.append("cd")
             # receiver_cmd_args_list.append("cd")
+            python_path = ""
+            if os.name != "nt":
+                cmd = ['which', 'python']
+                out = subprocess.run(cmd, stdout=subprocess.PIPE)
+                python_path = out.stdout.decode()[0:-1]
+                print(python_path)
+                print("hoge")
 
-            sender_cmd_args_list.append("python")
-            receiver_cmd_args_list.append("python")
+            if python_path == "":
+                sender_cmd_args_list.append("python")
+                receiver_cmd_args_list.append("python")
+            else:
+                sender_cmd_args_list.append(python_path)
+                receiver_cmd_args_list.append(python_path)
+
             sender_cmd_args_list.append(get_relative_this_script_path())
             receiver_cmd_args_list.append(get_relative_this_script_path())
             sender_cmd_args_list.append("--signaling")
@@ -889,6 +895,7 @@ if __name__ == '__main__':
                 sender_cmd_args_list.append(args.gid + "conn2")
                 receiver_cmd_args_list.append(args.gid + "conn1")
 
+            print(sender_cmd_args_list)
 
             sender_proc = subprocess.Popen(sender_cmd_args_list, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             sender_stdout_piper_th = threading.Thread(target=stdout_piper_th, daemon=True, args=(["sender_proc", sender_proc]))
@@ -943,4 +950,3 @@ if __name__ == '__main__':
             #fp.close()
             loop.run_until_complete(pc.close())
             loop.run_until_complete(signaling.close())
-
