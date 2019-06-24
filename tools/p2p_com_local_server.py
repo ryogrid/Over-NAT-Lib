@@ -840,20 +840,20 @@ if __name__ == '__main__':
             # receiver_cmd_args_list.append("--version")
             # sender_cmd_args_list.append("cd")
             # receiver_cmd_args_list.append("cd")
-            python_path = ""
-            if os.name != "nt":
-                cmd = ['which', 'python']
-                out = subprocess.run(cmd, stdout=subprocess.PIPE)
-                python_path = out.stdout.decode()[0:-1]
-                print(python_path)
-                print("hoge")
+            # python_path = ""
+            # if os.name != "nt":
+                # cmd = ['which', 'python']
+                # out = subprocess.run(cmd, stdout=subprocess.PIPE)
+                # python_path = out.stdout.decode()[0:-1]
+                # print(python_path)
+                # print("hoge")
 
-            if python_path == "":
-                sender_cmd_args_list.append("python")
-                receiver_cmd_args_list.append("python")
-            else:
-                sender_cmd_args_list.append(python_path)
-                receiver_cmd_args_list.append(python_path)
+            # if python_path == "":
+            sender_cmd_args_list.append("python")
+            receiver_cmd_args_list.append("python")
+            # else:
+            #     sender_cmd_args_list.append(python_path)
+            #     receiver_cmd_args_list.append(python_path)
 
             sender_cmd_args_list.append(get_relative_this_script_path())
             receiver_cmd_args_list.append(get_relative_this_script_path())
@@ -894,6 +894,10 @@ if __name__ == '__main__':
             else:
                 sender_cmd_args_list.append(args.gid + "conn2")
                 receiver_cmd_args_list.append(args.gid + "conn1")
+
+            if os.name != "nt":
+                sender_cmd_args_list = " ".join(sender_cmd_args_list)
+                receiver_cmd_args_list = " ".join(receiver_cmd_args_list)                
 
             print(sender_cmd_args_list)
 
