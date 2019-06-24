@@ -804,9 +804,9 @@ if __name__ == '__main__':
         sys.exit(0)
 
     if len(args.gid) < 10:
-        print("gid should have length at least 10 characters. I suggest use " + getRandomID(10))
+        #print("gid should have length at least 10 characters. I suggest use " + getRandomID(10))
+        print("gid should have length at least 10 characters.")
         sys.exit(0)
-
 
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
