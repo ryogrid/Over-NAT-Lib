@@ -899,7 +899,7 @@ if __name__ == '__main__':
                 sender_cmd_args_list = " ".join(sender_cmd_args_list)
                 receiver_cmd_args_list = " ".join(receiver_cmd_args_list)                
 
-            print(sender_cmd_args_list)
+            #print(sender_cmd_args_list)
 
             sender_proc = subprocess.Popen(sender_cmd_args_list, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             sender_stdout_piper_th = threading.Thread(target=stdout_piper_th, daemon=True, args=(["sender_proc", sender_proc]))
