@@ -789,9 +789,9 @@ if __name__ == '__main__':
     parser.add_argument('--role', choices=['send', 'receive'])
     parser.add_argument('--name', choices=['tom', 'bob'])
     parser.add_argument('--verbose', '-v', action='count')
-    parser.add_argument('--send-stream-port', default=10100,
+    parser.add_argument('--send-stream-port', default=10100, type=int,
                         help='This local server make datachannel stream readable at this port')
-    parser.add_argument('--recv-stream-port', default=10200,
+    parser.add_argument('--recv-stream-port', default=10200, type=int,
                         help='This local server make datachannel stream readable at this port')
     parser.add_argument('--slide-stream-ports',
                         help='When you exec two process on same host, other side process should change streaming port', action='store_true')
@@ -895,9 +895,9 @@ if __name__ == '__main__':
                 sender_cmd_args_list.append(args.gid + "conn2")
                 receiver_cmd_args_list.append(args.gid + "conn1")
 
-            if os.name != "nt":
-                sender_cmd_args_list = " ".join(sender_cmd_args_list)
-                receiver_cmd_args_list = " ".join(receiver_cmd_args_list)                
+            #if os.name != "nt":
+            sender_cmd_args_list = " ".join(sender_cmd_args_list)
+            receiver_cmd_args_list = " ".join(receiver_cmd_args_list)
 
             #print(sender_cmd_args_list)
 
