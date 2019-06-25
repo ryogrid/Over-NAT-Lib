@@ -2,8 +2,8 @@
 Library and tools for using data channel of WebRTC which can establish transport over NAT  
   
   
-# Using example  
-https://twitter.com/samehada_grid/status/1139485812985233410
+# Usage  
+https://qiita.com/ryo_grid/items/4ce5d45454887500e9c8
   
   
 # To people who are interested in this library and tools
