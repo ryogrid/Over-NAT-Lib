@@ -6,7 +6,7 @@ import logging
 import sys
 import os
 import threading
-import time
+import datetime, time
 import subprocess
 import signal
 
@@ -54,12 +54,10 @@ queue_lock = threading.Lock()
 sender_recv_bytes_from_client = 0
 sender_client_eof_or_disconnected = False
 
-def getRandomID(length):
-    # 英数字をすべて取得
+def get_random_ID(length):
     dat = string.digits + string.digits + string.digits + \
             string.ascii_lowercase + string.ascii_uppercase
 
-    # 英数字からランダムに取得
     return ''.join([random.choice(dat) for times in range(length)])
 
 async def consume_signaling(pc, signaling):
@@ -119,13 +117,13 @@ async def run_answer(pc, signaling):
 
             if is_checked_filetransfer == False:
                 decoded_str = None
-                if message != None and len(message) == 8:
+                if message != None and len(message) == 2:
                     try:
                         decoded_str = message.decode()
                     except:
                         is_checked_filetransfer = True
 
-                    if decoded_str != None and decoded_str == "sendfile":
+                    if decoded_str != None and decoded_str == "sf":
                         #await receiver_fifo_q.put(message)
                         file_transfer_phase = 1
                         return
@@ -385,23 +383,38 @@ async def sender_server_handler(reader, writer):
         print("new client connected.")
         print("wake up new sender_server_handler [" + str(this_sender_handler_id_str)  + "]")
         # wait remote server is connected with some program
+        head_2byte = b''
         while remote_stdout_connected == False and file_transfer_mode == False:
             print("wait remote_stdout_connected", file=sys.stderr)
             if is_checked_filetransfer == False:
-                rcvmsg = await reader.read(8)
+                rcvmsg = await reader.read(1)
+                #print(rcvmsg)
+                head_2byte = b''.join([head_2byte, rcvmsg])
+                try:
+                    if len(head_2byte) == 1:
+                        if head_2byte.decode() == "s":
+                            #print("first byte is *s*")
+                            #sys.stdout.flush()
+                            continue
+                        else:
+                            #print("not s")
+                            #sys.stdout.flush()
+                            is_checked_filetransfer = True
+                except:
+                    pass
+
                 decoded_str = None
-                if rcvmsg != None and len(rcvmsg) == 8:
-                    print("head 8byres read")
+                if rcvmsg != None and len(head_2byte) == 2:
                     try:
-                        decoded_str = rcvmsg.decode()
+                        decoded_str = head_2byte.decode()
                     except:
                         pass
-                    if decoded_str == "sendfile":
+                    if decoded_str == "sf":
                         try:
                             print("file transfer mode [" + this_sender_handler_id_str + "]")
                             queue_lock.acquire()
-                            await sender_fifo_q.put([this_sender_handler_id, rcvmsg])
-                            rcvmsg = await reader.read(2)
+                            await sender_fifo_q.put([this_sender_handler_id, head_2byte])
+                            rcvmsg = await reader.read(3)
                             filename_bytes = int(rcvmsg.decode())
                             await sender_fifo_q.put([this_sender_handler_id, rcvmsg])
                             print(filename_bytes)
@@ -410,19 +423,19 @@ async def sender_server_handler(reader, writer):
                             await sender_fifo_q.put([this_sender_handler_id, rcvmsg])
                             file_transfer_mode = True
                             is_checked_filetransfer = True
-                            sender_recv_bytes_from_client += 8 + 2 + filename_bytes
+                            sender_recv_bytes_from_client += 2 + 3 + filename_bytes
                         except:
                             pass
                         finally:
                             queue_lock.release()
                         continue
                     else:
-                        sender_recv_bytes_from_client += len(rcvmsg)
-                        byte_buf = b''.join([byte_buf, rcvmsg])
+                        sender_recv_bytes_from_client += len(head_2byte)
+                        byte_buf = b''.join([byte_buf, head_2byte])
                         is_checked_filetransfer = True
                 else:
-                    sender_recv_bytes_from_client += len(rcvmsg)
-                    byte_buf = b''.join([byte_buf, rcvmsg])
+                    sender_recv_bytes_from_client += len(head_2byte)
+                    byte_buf = b''.join([byte_buf, head_2byte])
                     is_checked_filetransfer = True
 
             await asyncio.sleep(1)
@@ -448,11 +461,12 @@ async def sender_server_handler(reader, writer):
                 print("received message from client[" + this_sender_handler_id_str + "]", file=sys.stderr)
                 print(len(rcvmsg), file=sys.stderr)
 
-                # block sends until bufferd data amount is gleater than 100KB
-                if(len(byte_buf) <= 1024 * 512) and (rcvmsg != None and len(rcvmsg) > 0): #1MB
-                    print("current bufferd byteds: " + str(len(byte_buf)), file=sys.stderr)
-                    await asyncio.sleep(0.01)
-                    continue
+                if args.no_buffering != True:
+                    # block sends until bufferd data amount is gleater than 100KB
+                    if(len(byte_buf) <= 1024 * 512) and (rcvmsg != None and len(rcvmsg) > 0): #1MB
+                        print("current bufferd byteds: " + str(len(byte_buf)), file=sys.stderr)
+                        await asyncio.sleep(0.01)
+                        continue
             except:
                 traceback.print_exc()
 
@@ -576,7 +590,8 @@ async def receiver_server_handler(clientsock):
                         clientsock.close()
                         return
 
-                clientsock.send(data)
+                clientsock.sendall(data)
+                #clientsock.flush()
                 #print("client is_closing:" + str(writer.transport.is_closing()))
 
                 # if len(data) == 8: # maybe "finished message"
@@ -782,6 +797,10 @@ def keyboard_interrupt_hundler():
     sys.stderr.flush()
     sys.exit(0)
 
+def get_unixtime_microsec_part():
+    cur = datetime.datetime.now()
+    return cur.microsecond
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Data channel file transfer')
     parser.add_argument('gid', default="", help="unique ID which should be shared by two users of p2p transport (if not specified, this program generate appropriate one)")
@@ -789,6 +808,7 @@ if __name__ == '__main__':
     parser.add_argument('--role', choices=['send', 'receive'])
     parser.add_argument('--name', choices=['tom', 'bob'])
     parser.add_argument('--verbose', '-v', action='count')
+    parser.add_argument('--no-buffering', action='store_true')
     parser.add_argument('--send-stream-port', default=10100, type=int,
                         help='This local server make datachannel stream readable at this port')
     parser.add_argument('--recv-stream-port', default=10200, type=int,
@@ -798,14 +818,17 @@ if __name__ == '__main__':
     add_signaling_arguments(parser)
     args = parser.parse_args()
 
+    # set seed from microsecond part of unixtime
+    random.seed(get_unixtime_microsec_part())
+
     if args.gid == "please_gen":
-        args.gid = getRandomID(10)
+        args.gid = get_random_ID(10)
         print("generated unique ID " + args.gid + ". you should share this with the other side user.")
         sys.exit(0)
 
     if len(args.gid) < 10:
-        #print("gid should have length at least 10 characters. I suggest use " + getRandomID(10))
-        print("gid should have length at least 10 characters.")
+        print("gid should have length at least 10 characters. I suggest use " + get_random_ID(10))
+        #print("gid should have length at least 10 characters.")
         sys.exit(0)
 
     if args.verbose:
@@ -881,6 +904,9 @@ if __name__ == '__main__':
                 receiver_cmd_args_list.append("--recv-stream-port")
                 sender_cmd_args_list.append("10101")
                 receiver_cmd_args_list.append("10201")
+            if args.no_buffering:
+                sender_cmd_args_list.append("--no-buffering")
+                receiver_cmd_args_list.append("--no-buffering")
             if args.verbose:
                 sender_cmd_args_list.append("-v")
                 receiver_cmd_args_list.append("-v")
