@@ -446,11 +446,12 @@ async def sender_server_handler(reader, writer):
                 print("received message from client[" + this_sender_handler_id_str + "]", file=sys.stderr)
                 print(len(rcvmsg), file=sys.stderr)
 
-                # block sends until bufferd data amount is gleater than 100KB
-                if(len(byte_buf) <= 1024 * 512) and (rcvmsg != None and len(rcvmsg) > 0): #1MB
-                    print("current bufferd byteds: " + str(len(byte_buf)), file=sys.stderr)
-                    await asyncio.sleep(0.01)
-                    continue
+                if args.no_buffering != True:
+                    # block sends until bufferd data amount is gleater than 100KB
+                    if(len(byte_buf) <= 1024 * 512) and (rcvmsg != None and len(rcvmsg) > 0): #1MB
+                        print("current bufferd byteds: " + str(len(byte_buf)), file=sys.stderr)
+                        await asyncio.sleep(0.01)
+                        continue
             except:
                 traceback.print_exc()
 
@@ -791,6 +792,7 @@ if __name__ == '__main__':
     parser.add_argument('--role', choices=['send', 'receive'])
     parser.add_argument('--name', choices=['tom', 'bob'])
     parser.add_argument('--verbose', '-v', action='count')
+    parser.add_argument('--no-buffering', action='store_true')
     parser.add_argument('--send-stream-port', default=10100, type=int,
                         help='This local server make datachannel stream readable at this port')
     parser.add_argument('--recv-stream-port', default=10200, type=int,
@@ -886,6 +888,9 @@ if __name__ == '__main__':
                 receiver_cmd_args_list.append("--recv-stream-port")
                 sender_cmd_args_list.append("10101")
                 receiver_cmd_args_list.append("10201")
+            if args.no_buffering:
+                sender_cmd_args_list.append("--no-buffering")
+                receiver_cmd_args_list.append("--no-buffering")
             if args.verbose:
                 sender_cmd_args_list.append("-v")
                 receiver_cmd_args_list.append("-v")
