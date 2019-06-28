@@ -57,10 +57,10 @@ def client_loop():
         with open(fileno, "rb", closefd=False) as f:
             #if args.filename != "":
             if len(args.filename) >= 1:
-                client.sendall("sendfile".encode())
+                client.sendall("sf".encode())
                 fname_bytes = len(args.filename.encode())
                 print(fname_bytes)
-                fname = '{0:02d}'.format(fname_bytes)
+                fname = '{0:03d}'.format(fname_bytes)
                 client.sendall(fname.encode())
                 client.sendall(args.filename.encode())
             while True:

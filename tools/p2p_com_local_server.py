@@ -117,13 +117,13 @@ async def run_answer(pc, signaling):
 
             if is_checked_filetransfer == False:
                 decoded_str = None
-                if message != None and len(message) == 8:
+                if message != None and len(message) == 2:
                     try:
                         decoded_str = message.decode()
                     except:
                         is_checked_filetransfer = True
 
-                    if decoded_str != None and decoded_str == "sendfile":
+                    if decoded_str != None and decoded_str == "sf":
                         #await receiver_fifo_q.put(message)
                         file_transfer_phase = 1
                         return
@@ -383,23 +383,38 @@ async def sender_server_handler(reader, writer):
         print("new client connected.")
         print("wake up new sender_server_handler [" + str(this_sender_handler_id_str)  + "]")
         # wait remote server is connected with some program
+        head_2byte = b''
         while remote_stdout_connected == False and file_transfer_mode == False:
             print("wait remote_stdout_connected", file=sys.stderr)
             if is_checked_filetransfer == False:
-                rcvmsg = await reader.read(8)
+                rcvmsg = await reader.read(1)
+                #print(rcvmsg)
+                head_2byte = b''.join([head_2byte, rcvmsg])
+                try:
+                    if len(head_2byte) == 1:
+                        if head_2byte.decode() == "s":
+                            #print("first byte is *s*")
+                            #sys.stdout.flush()
+                            continue
+                        else:
+                            #print("not s")
+                            #sys.stdout.flush()
+                            is_checked_filetransfer = True
+                except:
+                    pass
+
                 decoded_str = None
-                if rcvmsg != None and len(rcvmsg) == 8:
-                    print("head 8byres read")
+                if rcvmsg != None and len(head_2byte) == 2:
                     try:
-                        decoded_str = rcvmsg.decode()
+                        decoded_str = head_2byte.decode()
                     except:
                         pass
-                    if decoded_str == "sendfile":
+                    if decoded_str == "sf":
                         try:
                             print("file transfer mode [" + this_sender_handler_id_str + "]")
                             queue_lock.acquire()
-                            await sender_fifo_q.put([this_sender_handler_id, rcvmsg])
-                            rcvmsg = await reader.read(2)
+                            await sender_fifo_q.put([this_sender_handler_id, head_2byte])
+                            rcvmsg = await reader.read(3)
                             filename_bytes = int(rcvmsg.decode())
                             await sender_fifo_q.put([this_sender_handler_id, rcvmsg])
                             print(filename_bytes)
@@ -408,19 +423,19 @@ async def sender_server_handler(reader, writer):
                             await sender_fifo_q.put([this_sender_handler_id, rcvmsg])
                             file_transfer_mode = True
                             is_checked_filetransfer = True
-                            sender_recv_bytes_from_client += 8 + 2 + filename_bytes
+                            sender_recv_bytes_from_client += 2 + 3 + filename_bytes
                         except:
                             pass
                         finally:
                             queue_lock.release()
                         continue
                     else:
-                        sender_recv_bytes_from_client += len(rcvmsg)
-                        byte_buf = b''.join([byte_buf, rcvmsg])
+                        sender_recv_bytes_from_client += len(head_2byte)
+                        byte_buf = b''.join([byte_buf, head_2byte])
                         is_checked_filetransfer = True
                 else:
-                    sender_recv_bytes_from_client += len(rcvmsg)
-                    byte_buf = b''.join([byte_buf, rcvmsg])
+                    sender_recv_bytes_from_client += len(head_2byte)
+                    byte_buf = b''.join([byte_buf, head_2byte])
                     is_checked_filetransfer = True
 
             await asyncio.sleep(1)
@@ -575,7 +590,8 @@ async def receiver_server_handler(clientsock):
                         clientsock.close()
                         return
 
-                clientsock.send(data)
+                clientsock.sendall(data)
+                #clientsock.flush()
                 #print("client is_closing:" + str(writer.transport.is_closing()))
 
                 # if len(data) == 8: # maybe "finished message"
