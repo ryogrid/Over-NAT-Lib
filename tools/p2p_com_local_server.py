@@ -6,7 +6,7 @@ import logging
 import sys
 import os
 import threading
-import time
+import datetime, time
 import subprocess
 import signal
 
@@ -54,12 +54,10 @@ queue_lock = threading.Lock()
 sender_recv_bytes_from_client = 0
 sender_client_eof_or_disconnected = False
 
-def getRandomID(length):
-    # 英数字をすべて取得
+def get_random_ID(length):
     dat = string.digits + string.digits + string.digits + \
             string.ascii_lowercase + string.ascii_uppercase
 
-    # 英数字からランダムに取得
     return ''.join([random.choice(dat) for times in range(length)])
 
 async def consume_signaling(pc, signaling):
@@ -782,6 +780,10 @@ def keyboard_interrupt_hundler():
     sys.stderr.flush()
     sys.exit(0)
 
+def get_unixtime_microsec_part():
+    cur = datetime.datetime.now()
+    return cur.microsecond
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Data channel file transfer')
     parser.add_argument('gid', default="", help="unique ID which should be shared by two users of p2p transport (if not specified, this program generate appropriate one)")
@@ -798,14 +800,17 @@ if __name__ == '__main__':
     add_signaling_arguments(parser)
     args = parser.parse_args()
 
+    # set seed from microsecond part of unixtime
+    random.seed(get_unixtime_microsec_part())
+
     if args.gid == "please_gen":
-        args.gid = getRandomID(10)
+        args.gid = get_random_ID(10)
         print("generated unique ID " + args.gid + ". you should share this with the other side user.")
         sys.exit(0)
 
     if len(args.gid) < 10:
-        #print("gid should have length at least 10 characters. I suggest use " + getRandomID(10))
-        print("gid should have length at least 10 characters.")
+        print("gid should have length at least 10 characters. I suggest use " + get_random_ID(10))
+        #print("gid should have length at least 10 characters.")
         sys.exit(0)
 
     if args.verbose:
