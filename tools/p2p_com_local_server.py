@@ -9,16 +9,12 @@ import threading
 import datetime, time
 import subprocess
 import signal
-
-#from os import path
-#sys.path.append(path.dirname(path.abspath(__file__)) + "/../../")
-#sys.path.insert(0, path.dirname(path.abspath(__file__)) + "/../../tmp/punch_sctp_plain_tmp/")
-
 from aiortcdc import RTCPeerConnection, RTCSessionDescription
 
-from signaling_share_ws import add_signaling_arguments, create_signaling
+#from os import path
+#sys.path.append(path.dirname(path.abspath(__file__)) + "/../")
 
-# application level ws communication
+from onatlib.signaling_share_ws import create_signaling, add_signaling_arguments
 import websocket
 import traceback
 import socket
@@ -801,7 +797,25 @@ def get_unixtime_microsec_part():
     cur = datetime.datetime.now()
     return cur.microsecond
 
-if __name__ == '__main__':
+loop = None
+pc = None
+signaling = None
+colo = None
+sender_proc = None
+receiver_proc = None
+args = None
+ws_protcol_str = "ws"
+
+def main():
+    global loop
+    global pc
+    global signaling
+    global colo
+    global sender_proc
+    global receiver_proc
+    global args
+    global ws_protcol_str
+
     parser = argparse.ArgumentParser(description='Data channel file transfer')
     parser.add_argument('gid', default="", help="unique ID which should be shared by two users of p2p transport (if not specified, this program generate appropriate one)")
     parser.add_argument('--hierarchy', default="parent", choices=['parent', 'child'])
@@ -835,7 +849,6 @@ if __name__ == '__main__':
         logging.basicConfig(level=logging.DEBUG)
     #websocket.enableTrace(True)
 
-    ws_protcol_str = "ws"
     if args.secure_signaling == True:
         ws_protcol_str = "wss"
 
@@ -845,9 +858,6 @@ if __name__ == '__main__':
     # else:
     #     signal.signal(signal.SIGINT, keyboard_interrupt_hundler)
 
-    colo = None
-    sender_proc = None
-    receiver_proc = None
     if args.hierarchy == 'parent':
         try:
             if args.name != "tom" and args.name != "bob":
@@ -963,7 +973,6 @@ if __name__ == '__main__':
         else:
             print("please pass --role {send|receive} option")
 
-        loop = None
         try:
             # run event loop
             loop = asyncio.get_event_loop()
@@ -980,3 +989,6 @@ if __name__ == '__main__':
             #fp.close()
             loop.run_until_complete(pc.close())
             loop.run_until_complete(signaling.close())
+
+if __name__ == '__main__':
+    main()
