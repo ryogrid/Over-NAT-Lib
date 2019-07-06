@@ -16,7 +16,7 @@ install_requires = [
 
 setuptools.setup(
     name='onatlib',
-    version='0.0.1',
+    version='0.0.2',
     description='A tool offers P2P communication to transfer files and connect pipes between PCs in different NATs',
     long_description_content_type="text/markdown",
     long_description=long_description,
