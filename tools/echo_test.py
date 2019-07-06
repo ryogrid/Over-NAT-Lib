@@ -6,7 +6,7 @@ import sys
 
 
 from os import path
-sys.path.append(path.dirname(path.abspath(__file__)) + "/../")
+#sys.path.append(path.dirname(path.abspath(__file__)) + "/../")
 
 import argparse
 from onatlib.channel import Channel
