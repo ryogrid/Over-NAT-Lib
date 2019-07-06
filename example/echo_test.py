@@ -2,11 +2,8 @@
 
 import traceback
 import sys
-#import os
-
 
 from os import path
-#sys.path.append(path.dirname(path.abspath(__file__)) + "/../")
 
 import argparse
 from onatlib.channel import Channel
