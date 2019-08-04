@@ -97,7 +97,7 @@ def add_signaling_arguments(parser):
         'share-websocket'])
     parser.add_argument('--signaling-host', default='127.0.0.1',
                         help='Signaling server host')
-    parser.add_argument('--signaling-port', default=1234,
+    parser.add_argument('--signaling-port', default=10000,
                         help='Signaling server port')
     parser.add_argument('--secure-signaling',
                         help='Signaling communication is encrypted', action='store_true')

@@ -211,8 +211,12 @@ def signaling_app(environ, start_response):
     except:
         print("maybe client disconnected.")
 
+args = None
+server = None
 
-if __name__ == '__main__':
+def main():
+    global args
+    global server
     parser = argparse.ArgumentParser(description='WebRTC datachannel signaling server with websocket protcol')
     parser.add_argument('--secure',
                         help='Signaling communication is encrypted', action='store_true')
@@ -220,7 +224,6 @@ if __name__ == '__main__':
                         help='Signaling server offers service port')
     args = parser.parse_args()
 
-    server = None
     if args.secure == True:
         server = pywsgi.WSGIServer(('0.0.0.0', int(args.port)), signaling_app, handler_class=WebSocketHandler,
                                    keyfile='privkey.pem', certfile='fullchain.pem')
@@ -229,3 +232,6 @@ if __name__ == '__main__':
 
     print("Server is running on localhost: " + str(args.port) + "...")
     server.serve_forever()
+
+if __name__ == '__main__':
+    main()
