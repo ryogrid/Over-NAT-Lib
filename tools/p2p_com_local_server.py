@@ -881,15 +881,21 @@ def main():
                 # print(python_path)
                 # print("hoge")
 
-            # if python_path == "":
-            sender_cmd_args_list.append("python")
-            receiver_cmd_args_list.append("python")
-            # else:
-            #     sender_cmd_args_list.append(python_path)
-            #     receiver_cmd_args_list.append(python_path)
+            # iprogram is converted to exe file
+            if sys.argv[0] == "p2p_com_local_server.exe":
+                sender_cmd_args_list.append("p2p_com_local_server.exe")
+                receiver_cmd_args_list.append("p2p_com_local_server.exe")
+            else:
+                # if python_path == "":
+                sender_cmd_args_list.append("python")
+                receiver_cmd_args_list.append("python")
+                # else:
+                #     sender_cmd_args_list.append(python_path)
+                #     receiver_cmd_args_list.append(python_path)
 
-            sender_cmd_args_list.append(get_relative_this_script_path())
-            receiver_cmd_args_list.append(get_relative_this_script_path())
+                sender_cmd_args_list.append(get_relative_this_script_path())
+                receiver_cmd_args_list.append(get_relative_this_script_path())
+
             sender_cmd_args_list.append("--signaling")
             receiver_cmd_args_list.append("--signaling")
             sender_cmd_args_list.append("share-websocket")
