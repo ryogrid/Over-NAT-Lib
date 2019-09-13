@@ -6,6 +6,9 @@ import socket
 import time
 from multiprocessing import Process
 
+def client_handle_msg(msg):
+    print(msg.decode())
+
 def client_run():
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -16,13 +19,17 @@ def client_run():
                 inputed_line = input("Please type characters and press Retuen key: ")
                 client.sendall(inputed_line.encode())
                 recvmsg = client.recv(1024)
-                print(recvmsg.decode())
+                client_handle_msg(recvmsg)
+                #print(recvmsg.decode())
             except:
                 traceback.print_exc()
                 print("echo client exit due to some exception occur.")
                 break
     except:
         traceback.print_exc()
+
+def server_handle_msg(msg):
+    return msg
 
 def server_run():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -38,7 +45,9 @@ def server_run():
             if data == None or len(data) == 0:
                 break
             else:
-                clientsock.sendall(data)
+                resp = server_handle_msg(data)
+                clientsock.sendall(resp)
+                #clientsock.sendall(data)
 
         clientsock.close()
 
