@@ -21,11 +21,16 @@ import socket
 import random
 import string
 
-import lsrvcommon
-from lsrvcommon import GlobalVals
-
-import sender
-import receiver
+try:
+    import lsrvcommon
+    from lsrvcommon import GlobalVals
+    import sender
+    import receiver
+except:
+    from . import lsrvcommon
+    from .lsrvcommon import GlobalVals
+    from . import sender
+    from . import receiver
 
 # #common
 # sctp_transport_established = False

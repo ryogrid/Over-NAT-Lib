@@ -21,8 +21,12 @@ import socket
 import random
 import string
 
-import lsrvcommon
-from lsrvcommon import GlobalVals
+try:
+    import lsrvcommon
+    from lsrvcommon import GlobalVals
+except:
+    from . import lsrvcommon
+    from .lsrvcommon import GlobalVals
 
 #common
 #sctp_transport_established = False
