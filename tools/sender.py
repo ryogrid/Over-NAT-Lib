@@ -1,25 +1,10 @@
 # coding: utf-8
 
-import argparse
 import asyncio
-import logging
 import sys
-import os
 import threading
-import datetime, time
-import subprocess
-import signal
-from aiortcdc import RTCPeerConnection, RTCSessionDescription
-
-#from os import path
-#sys.path.append(path.dirname(path.abspath(__file__)) + "/../")
-
-from onatlib.signaling_share_ws import create_signaling, add_signaling_arguments
 import websocket
 import traceback
-import socket
-import random
-import string
 
 try:
     import lsrvcommon
@@ -28,26 +13,19 @@ except:
     from . import lsrvcommon
     from .lsrvcommon import GlobalVals
 
-#common
-#sctp_transport_established = False
-#force_exited = False
+
 file_transfer_mode = False
 file_transfer_phase = 0
 queue_lock = threading.Lock()
-#send_ws = None
 
 #sender
-#remote_stdout_connected = False
 sender_fifo_q = asyncio.Queue()
 server_send = None
 # except header data
 sender_recv_bytes_from_client = 0
 sender_client_eof_or_disconnected = False
-#next_sender_handler_id = 0
 
 async def run_offer(pc, signaling):
-    #global remote_stdout_connected
-
     while True:
         try:
             await signaling.connect()
@@ -76,10 +54,8 @@ async def run_offer(pc, signaling):
         nonlocal channel_sender
         global sctp_transport_established
         global sender_fifo_q
-        #global remote_stdout_connected
         global file_transfer_mode
         global queue_lock
-        #global next_sender_handler_id
         global sender_recv_bytes_from_client
         global sender_client_eof_or_disconnected
 
@@ -164,11 +140,9 @@ async def sender_server_handler(reader, writer):
     global sender_fifo_q
     global file_transfer_mode
     global is_checked_filetransfer
-    #global next_sender_handler_id
     global queue_lock
     global sender_client_eof_or_disconnected
     global sender_recv_bytes_from_client
-    #global remote_stdout_connected
 
     print('Local server writer port waiting for client connections...')
 
@@ -251,7 +225,6 @@ async def sender_server_handler(reader, writer):
             if GlobalVals.remote_stdout_connected == False and file_transfer_mode == False:
                 queue_lock.acquire()
                 sender_fifo_q = asyncio.Queue()
-                #await clear_queue(sender_fifo_q)
                 queue_lock.release()
                 await asyncio.sleep(3)
             try:
@@ -305,9 +278,6 @@ async def sender_server():
         await server_send.serve_forever()
 
 def setup_ws_sub_sender_for_sender_server():
-    #global send_ws
-    #global sub_channel_sig
-
     GlobalVals.send_ws = websocket.create_connection(GlobalVals.ws_protcol_str +  "://" + GlobalVals.args.signaling_host + ":" + str(GlobalVals.args.signaling_port) + "/")
     print("sender app level ws (2) opend")
     GlobalVals.sub_channel_sig = GlobalVals.args.gid + "stor"

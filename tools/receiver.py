@@ -1,25 +1,13 @@
 # coding: utf-8
 
-import argparse
 import asyncio
-import logging
 import sys
-import os
 import threading
-import datetime, time
-import subprocess
-import signal
-from aiortcdc import RTCPeerConnection, RTCSessionDescription
+import time
 
-#from os import path
-#sys.path.append(path.dirname(path.abspath(__file__)) + "/../")
-
-from onatlib.signaling_share_ws import create_signaling, add_signaling_arguments
 import websocket
 import traceback
 import socket
-import random
-import string
 
 try:
     import lsrvcommon
@@ -29,20 +17,15 @@ except:
     from .lsrvcommon import GlobalVals
 
 #common
-#sctp_transport_established = False
-#force_exited = False
 file_transfer_mode = False
 file_transfer_phase = 0
 queue_lock = threading.Lock()
-#send_ws = None
 
 #receiver
-#remote_stdin_connected = False
 receiver_fifo_q = asyncio.Queue()
 server_rcv = None
 cur_recv_clientsock = None
 is_remote_node_exists_on_my_send_room = False
-#is_received_client_disconnect_request = False
 client_address = None
 
 # app level websocket sending should anytime use this
@@ -163,11 +146,7 @@ async def run_answer(pc, signaling):
 async def receiver_server_handler(clientsock):
     global receiver_fifo_q
     global is_remote_node_exists_on_my_send_room
-    #global is_received_client_disconnect_request
-    #global send_ws
-    #global sub_channel_sig
     global cur_recv_clientsock
-    #global next_sender_handler_id
 
     this_sender_handler_id = GlobalVals.next_sender_handler_id
     this_sender_handler_id_str = str(this_sender_handler_id)

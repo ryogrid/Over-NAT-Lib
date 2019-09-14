@@ -32,35 +32,8 @@ except:
     from . import sender
     from . import receiver
 
-# #common
-# sctp_transport_established = False
-# force_exited = False
-# file_transfer_mode = False
-# file_transfer_phase = 0
-# queue_lock = threading.Lock()
-# send_ws = None
-
-
-# signaling = None
-# sub_channel_sig = None
-#
-# loop = None
-# pc = None
-# signaling = None
-# colo = None
-# sender_proc = None
-# receiver_proc = None
-# args = None
-# ws_protcol_str = "ws"
-
-
 def ws_sub_receiver():
     def on_message(ws, message):
-        #global remote_stdout_connected
-        #global remote_stdin_connected
-        #global done_reading
-        #global is_received_client_disconnect_request
-
         #print(message,  file=sys.stderr)
         print("called on_message", file=sys.stderr)
         #print(message)
@@ -70,8 +43,6 @@ def ws_sub_receiver():
                 print("receiver_connected")
             #print(fifo_q.getbuffer().nbytes)
             GlobalVals.remote_stdout_connected = True
-            # if fifo_q.getbuffer().nbytes != 0:
-            #     send_data()
         elif "receiver_disconnected" in message:
             GlobalVals.remote_stdout_connected = False
             GlobalVals.done_reading = False
@@ -133,7 +104,6 @@ def work_as_parent():
 async def send_keep_alive():
     while True:
         lsrvcommon.ws_sender_send_wrapper("keepalive")
-        #time.sleep(5)
         await asyncio.sleep(5)
 
 async def parallel_by_gather():
@@ -155,8 +125,6 @@ def stdout_piper_th(role, proc):
         while not proc.poll():
             stdout_data = proc.stdout.readline()
             if stdout_data:
-                #sys.stdout.write(stdoutdata.decode())
-                #stdout_fd.write(stdout_data)
                 stdout_fd.write(b''.join([role.encode(), ": ".encode(), stdout_data]))
                 stdout_fd.flush()
             else:
@@ -168,7 +136,6 @@ def stderr_piper_th(role, proc):
         while not proc.poll():
             stderr_data = proc.stderr.readline()
             if stderr_data:
-                #sys.stderr.write(stderr_data.decode())
                 stderr_fd.write(b''.join([role.encode(), ": ".encode(), stderr_data]))
                 stderr_fd.flush()
             else:
@@ -214,15 +181,6 @@ def get_unixtime_microsec_part():
     return cur.microsecond
 
 def main():
-    # global loop
-    # global pc
-    # global signaling
-    # global colo
-    # global sender_proc
-    # global receiver_proc
-    # global args
-    # global ws_protcol_str
-
     parser = argparse.ArgumentParser(description='Data channel file transfer')
     parser.add_argument('gid', default="", help="unique ID which should be shared by two users of p2p transport (if not specified, this program generate appropriate one)")
     parser.add_argument('--hierarchy', default="parent", choices=['parent', 'child'])
@@ -250,12 +208,10 @@ def main():
 
     if len(args.gid) < 10:
         print("gid should have length at least 10 characters. I suggest use " + get_random_ID(10))
-        #print("gid should have length at least 10 characters.")
         sys.exit(0)
 
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
-    #websocket.enableTrace(True)
 
     if args.secure_signaling == True:
         GlobalVals.ws_protcol_str = "wss"
@@ -277,9 +233,6 @@ def main():
                 # if python_path == "":
                 sender_cmd_args_list.append("python")
                 receiver_cmd_args_list.append("python")
-                # else:
-                #     sender_cmd_args_list.append(python_path)
-                #     receiver_cmd_args_list.append(python_path)
 
                 sender_cmd_args_list.append(get_relative_this_script_path())
                 receiver_cmd_args_list.append(get_relative_this_script_path())
@@ -381,7 +334,6 @@ def main():
             #traceback.print_exc()
             keyboard_interrupt_hundler()
         finally:
-            #fp.close()
             loop.run_until_complete(pc.close())
             loop.run_until_complete(signaling.close())
 

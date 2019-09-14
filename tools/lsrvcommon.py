@@ -1,25 +1,8 @@
 # coding: utf-8
 
-import argparse
-import asyncio
-import logging
 import sys
-import os
-import threading
-import datetime, time
-import subprocess
-import signal
-from aiortcdc import RTCPeerConnection, RTCSessionDescription
-
-#from os import path
-#sys.path.append(path.dirname(path.abspath(__file__)) + "/../")
-
-from onatlib.signaling_share_ws import create_signaling, add_signaling_arguments
-import websocket
+from aiortcdc import RTCSessionDescription
 import traceback
-import socket
-import random
-import string
 
 class GlobalVals:
     signaling = None
@@ -45,10 +28,6 @@ class GlobalVals:
 
 
 async def consume_signaling(pc, signaling):
-    #global force_exited
-    #global remote_stdout_connected
-    #global remote_stin_connected
-
     while True:
         try:
             obj = await signaling.receive()
