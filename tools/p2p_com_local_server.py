@@ -11,13 +11,9 @@ import subprocess
 import signal
 from aiortcdc import RTCPeerConnection, RTCSessionDescription
 
-#from os import path
-#sys.path.append(path.dirname(path.abspath(__file__)) + "/../")
-
 from onatlib.signaling_share_ws import create_signaling, add_signaling_arguments
 import websocket
 import traceback
-import socket
 import random
 import string
 
@@ -31,6 +27,8 @@ except:
     from .lsrvcommon import GlobalVals
     from . import sender
     from . import receiver
+
+loop = None
 
 def ws_sub_receiver():
     def on_message(ws, message):
@@ -84,7 +82,8 @@ def get_random_ID(length):
 
 
 async def ice_establishment_state():
-    #global force_exited
+    global loop
+
     while(GlobalVals.sctp_transport_established == False and "failed" not in GlobalVals.pc.iceConnectionState):
         print("ice_establishment_state: " + GlobalVals.pc.iceConnectionState, file=sys.stderr)
         await asyncio.sleep(1)
@@ -92,8 +91,8 @@ async def ice_establishment_state():
         print("hole punching to remote machine failed.")
         GlobalVals.force_exited = True
         try:
-            GlobalVals.loop.stop()
-            GlobalVals.loop.close()
+            loop.stop()
+            loop.close()
         except:
             pass
         print("exit.")
@@ -181,6 +180,8 @@ def get_unixtime_microsec_part():
     return cur.microsecond
 
 def main():
+    global loop
+
     parser = argparse.ArgumentParser(description='Data channel file transfer')
     parser.add_argument('gid', default="", help="unique ID which should be shared by two users of p2p transport (if not specified, this program generate appropriate one)")
     parser.add_argument('--hierarchy', default="parent", choices=['parent', 'child'])
@@ -328,7 +329,6 @@ def main():
         try:
             # run event loop
             loop = asyncio.get_event_loop()
-            GlobalVals.loop = loop
             loop.run_until_complete(parallel_by_gather())
         except KeyboardInterrupt:
             #traceback.print_exc()
