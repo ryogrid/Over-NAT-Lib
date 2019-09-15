@@ -50,13 +50,59 @@ async def run_answer(pc, signaling):
         fp = None
         file_transfer_filename = None
 
+        async def comm_type_check_of_client_head_data(message):
+            #global file_transfer_phase
+            global file_transfer_mode
+            #global sender_recv_bytes_from_client
+            nonlocal is_checked_filetransfer
+            nonlocal fp
+            nonlocal file_transfer_filename
+
+            if is_checked_filetransfer == False:
+                decoded_str = None
+                filename_bytes = -1
+                if message != None and len(message) > 2:
+                    try:
+                        head_2byte = message[:2]
+                        decoded_str = head_2byte.decode()
+                    except:
+                        is_checked_filetransfer = True
+                        return False
+
+                    if decoded_str == None or ( decoded_str != None and decoded_str != "sf"):
+                        is_checked_filetransfer = True
+                        return False
+
+                    try:
+                        decoded_str = message[2:5].decode()
+                        print("filename bytes: " + decoded_str)
+                        filename_bytes = int(decoded_str)
+                    except:
+                        traceback.print_exc()
+                        return False
+
+                    try:
+                        file_transfer_filename = message[5:5 + filename_bytes].decode()
+                        print(file_transfer_filename)
+                        fp = open(file_transfer_filename, "wb")
+                    except:
+                        traceback.print_exc()
+                        return False
+
+                    file_transfer_mode = True
+                    is_checked_filetransfer = True
+
+                    # requested special functionality and header data should be ignore
+                    return True
+
+
         @channel.on('message')
         async def on_message(message):
-            global file_transfer_phase
+            #global file_transfer_phase
             global file_transfer_mode
             global receiver_fifo_q
             global queue_lock
-            global sender_recv_bytes_from_client
+            #global sender_recv_bytes_from_client
             nonlocal is_checked_filetransfer
             nonlocal fp
             nonlocal file_transfer_filename
@@ -64,42 +110,12 @@ async def run_answer(pc, signaling):
             print("message event fired", file=sys.stderr)
             print("message received from datachannel: " + str(len(message)), file=sys.stderr)
 
-            if is_checked_filetransfer == False:
-                decoded_str = None
-                if message != None and len(message) == 2:
-                    try:
-                        decoded_str = message.decode()
-                    except:
-                        is_checked_filetransfer = True
-
-                    if decoded_str != None and decoded_str == "sf":
-                        #await receiver_fifo_q.put(message)
-                        file_transfer_phase = 1
-                        return
-                    else:
-                        is_checked_filetransfer = True
-
-                if file_transfer_phase == 1:
-                    #await receiver_fifo_q.put(message)
-                    try:
-                        decoded_str = message.decode()
-                        print("filename bytes: " + decoded_str)
-                        file_transfer_phase = 2
-                        return
-                    except:
-                        traceback.print_exc()
-
-                if file_transfer_phase == 2:
-                    try:
-                        print(message.decode())
-                        file_transfer_filename = message.decode()
-                        fp = open(file_transfer_filename, "wb")
-                    except:
-                        traceback.print_exc()
-                    file_transfer_mode = True
-                    is_checked_filetransfer = True
-                    file_transfer_phase = 0
-                    return
+            # check remote client request loccal server special functionality
+            # set global variables appropriately
+            is_special_func = await comm_type_check_of_client_head_data(message)
+            if is_special_func:
+                # when special functionality is used, header data of it should ignored on coded below
+                return
 
             if file_transfer_mode == True:
                 try:
@@ -109,7 +125,7 @@ async def run_answer(pc, signaling):
                             fp.close()
                             fp = None
                             is_checked_filetransfer = False
-                            file_transfer_phase = 0
+                            #file_transfer_phase = 0
                             file_transfer_mode = False
                             return
                         else:
@@ -122,7 +138,7 @@ async def run_answer(pc, signaling):
                     if len(message) > 0:
                         if len(message) == 8 and message.decode() == "finished":
                             is_checked_filetransfer = False
-                            file_transfer_phase = 0
+                            #file_transfer_phase = 0
                             file_transfer_mode = False
                             print("put data to queue: " + str(len(message)))
                             queue_lock.acquire()
