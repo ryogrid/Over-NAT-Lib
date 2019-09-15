@@ -138,7 +138,6 @@ async def run_offer(pc, signaling):
 async def sender_server_handler(reader, writer):
     global sender_fifo_q
     global file_transfer_mode
-    global is_checked_filetransfer
     global queue_lock
     global sender_client_eof_or_disconnected
     global sender_recv_bytes_from_client
