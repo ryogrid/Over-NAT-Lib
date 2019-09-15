@@ -146,6 +146,7 @@ async def comm_type_check_of_client_head_data(byte_buf, reader, this_sender_hand
         ret_buf = byte_buf
         head_2byte = b''
         is_checked_filetransfer = False
+        sf_mode_header_buf = b''
 
         while GlobalVals.remote_stdout_connected == False and file_transfer_mode == False:
             print("wait remote_stdout_connected", file=sys.stderr)
@@ -164,30 +165,50 @@ async def comm_type_check_of_client_head_data(byte_buf, reader, this_sender_hand
                             #sys.stdout.flush()
                             is_checked_filetransfer = True
                 except:
-                    pass
+                    traceback.print_exc()
 
                 decoded_str = None
                 if rcvmsg != None and len(head_2byte) == 2:
                     try:
                         decoded_str = head_2byte.decode()
                     except:
-                        pass
+                        traceback.print_exc()
+
                     if decoded_str == "sf":
                         try:
+                            # print("file transfer mode [" + str(this_sender_handler_id) + "]")
+                            # queue_lock.acquire()
+                            # await sender_fifo_q.put([this_sender_handler_id, head_2byte])
+                            # rcvmsg = await reader.read(3)
+                            # filename_bytes = int(rcvmsg.decode())
+                            # await sender_fifo_q.put([this_sender_handler_id, rcvmsg])
+                            # print(filename_bytes)
+                            # rcvmsg = await reader.read(filename_bytes)
+                            # print(rcvmsg.decode())
+                            # await sender_fifo_q.put([this_sender_handler_id, rcvmsg])
+                            # file_transfer_mode = True
+                            # is_checked_filetransfer = True
+                            # sender_recv_bytes_from_client += 2 + 3 + filename_bytes
+
                             print("file transfer mode [" + str(this_sender_handler_id) + "]")
                             queue_lock.acquire()
-                            await sender_fifo_q.put([this_sender_handler_id, head_2byte])
+                            #await sender_fifo_q.put([this_sender_handler_id, head_2byte])
+                            sf_mode_header_buf = b''.join([sf_mode_header_buf, head_2byte])
                             rcvmsg = await reader.read(3)
                             filename_bytes = int(rcvmsg.decode())
-                            await sender_fifo_q.put([this_sender_handler_id, rcvmsg])
+                            #await sender_fifo_q.put([this_sender_handler_id, rcvmsg])
+                            sf_mode_header_buf = b''.join([sf_mode_header_buf, rcvmsg])
                             print(filename_bytes)
                             rcvmsg = await reader.read(filename_bytes)
                             print(rcvmsg.decode())
-                            await sender_fifo_q.put([this_sender_handler_id, rcvmsg])
                             file_transfer_mode = True
                             is_checked_filetransfer = True
+                            sf_mode_header_buf = b''.join([sf_mode_header_buf, rcvmsg])
                             sender_recv_bytes_from_client += 2 + 3 + filename_bytes
+                            await sender_fifo_q.put([this_sender_handler_id, sf_mode_header_buf])
+                            #await sender_fifo_q.put([this_sender_handler_id, rcvmsg])
                         except:
+                            traceback.print_exc()
                             pass
                         finally:
                             queue_lock.release()
@@ -236,6 +257,7 @@ async def sender_server_handler(reader, writer):
 
     # check client needed special local server functionality
     # this function read data from socket and set appropriate value to global variables
+    # and all header data received from client are put to quuee on this func
     byte_buf = await comm_type_check_of_client_head_data(byte_buf, reader, this_sender_handler_id)
 
     try:
@@ -246,6 +268,7 @@ async def sender_server_handler(reader, writer):
                 sender_fifo_q = asyncio.Queue()
                 queue_lock.release()
                 await asyncio.sleep(3)
+
             try:
                 rcvmsg = await reader.read(5120)
                 sender_recv_bytes_from_client += len(rcvmsg)
