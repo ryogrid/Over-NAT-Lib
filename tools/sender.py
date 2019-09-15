@@ -238,64 +238,6 @@ async def sender_server_handler(reader, writer):
     # this function read data from socket and set appropriate value to global variables
     byte_buf = await comm_type_check_of_client_head_data(byte_buf, reader, this_sender_handler_id)
 
-    # try:
-    #     # wait remote server is connected with some program
-    #     head_2byte = b''
-    #     while GlobalVals.remote_stdout_connected == False and file_transfer_mode == False:
-    #         print("wait remote_stdout_connected", file=sys.stderr)
-    #         if is_checked_filetransfer == False:
-    #             rcvmsg = await reader.read(1)
-    #             #print(rcvmsg)
-    #             head_2byte = b''.join([head_2byte, rcvmsg])
-    #             try:
-    #                 if len(head_2byte) == 1:
-    #                     if head_2byte.decode() == "s":
-    #                         #print("first byte is *s*")
-    #                         #sys.stdout.flush()
-    #                         continue
-    #                     else:
-    #                         #print("not s")
-    #                         #sys.stdout.flush()
-    #                         is_checked_filetransfer = True
-    #             except:
-    #                 pass
-    #
-    #             decoded_str = None
-    #             if rcvmsg != None and len(head_2byte) == 2:
-    #                 try:
-    #                     decoded_str = head_2byte.decode()
-    #                 except:
-    #                     pass
-    #                 if decoded_str == "sf":
-    #                     try:
-    #                         print("file transfer mode [" + this_sender_handler_id_str + "]")
-    #                         queue_lock.acquire()
-    #                         await sender_fifo_q.put([this_sender_handler_id, head_2byte])
-    #                         rcvmsg = await reader.read(3)
-    #                         filename_bytes = int(rcvmsg.decode())
-    #                         await sender_fifo_q.put([this_sender_handler_id, rcvmsg])
-    #                         print(filename_bytes)
-    #                         rcvmsg = await reader.read(filename_bytes)
-    #                         print(rcvmsg.decode())
-    #                         await sender_fifo_q.put([this_sender_handler_id, rcvmsg])
-    #                         file_transfer_mode = True
-    #                         is_checked_filetransfer = True
-    #                         sender_recv_bytes_from_client += 2 + 3 + filename_bytes
-    #                     except:
-    #                         pass
-    #                     finally:
-    #                         queue_lock.release()
-    #                     continue
-    #                 else:
-    #                     sender_recv_bytes_from_client += len(head_2byte)
-    #                     byte_buf = b''.join([byte_buf, head_2byte])
-    #                     is_checked_filetransfer = True
-    #             else:
-    #                 sender_recv_bytes_from_client += len(head_2byte)
-    #                 byte_buf = b''.join([byte_buf, head_2byte])
-    #                 is_checked_filetransfer = True
-    #
-    #         await asyncio.sleep(1)
     try:
         while True:
             # if flag backed to False, end this handler because it means receiver side client disconnected
