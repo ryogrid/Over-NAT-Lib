@@ -11,13 +11,9 @@ import subprocess
 import signal
 from aiortcdc import RTCPeerConnection, RTCSessionDescription
 
-#from os import path
-#sys.path.append(path.dirname(path.abspath(__file__)) + "/../")
-
 from onatlib.signaling_share_ws import create_signaling, add_signaling_arguments
 import websocket
 import traceback
-import socket
 import random
 import string
 

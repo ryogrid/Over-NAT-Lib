@@ -16,14 +16,14 @@ except:
     from . import lsrvcommon
     from .lsrvcommon import GlobalVals
 
-#common
+# common
 file_transfer_mode = False
-file_transfer_phase = 0
 queue_lock = threading.Lock()
 
-#receiver
+# receiver
 receiver_fifo_q = asyncio.Queue()
 server_rcv = None
+file_transfer_phase = 0
 cur_recv_clientsock = None
 is_remote_node_exists_on_my_send_room = False
 client_address = None

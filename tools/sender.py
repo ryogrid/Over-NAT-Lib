@@ -13,12 +13,11 @@ except:
     from . import lsrvcommon
     from .lsrvcommon import GlobalVals
 
-
+# common
 file_transfer_mode = False
-file_transfer_phase = 0
 queue_lock = threading.Lock()
 
-#sender
+# sender
 sender_fifo_q = asyncio.Queue()
 server_send = None
 # except header data
@@ -52,7 +51,7 @@ async def run_offer(pc, signaling):
 
     async def send_data_inner():
         nonlocal channel_sender
-        global sctp_transport_established
+        #global sctp_transport_established
         global sender_fifo_q
         global file_transfer_mode
         global queue_lock
@@ -64,7 +63,7 @@ async def run_offer(pc, signaling):
         sent_bytes = 0
 
         while True:
-            sctp_transport_established = True
+            GlobalVals.sctp_transport_established = True
             while GlobalVals.remote_stdout_connected == False and file_transfer_mode == False:
                 print("wait remote_stdout_connected", file=sys.stderr)
                 await asyncio.sleep(1)

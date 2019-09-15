@@ -5,24 +5,30 @@ from aiortcdc import RTCSessionDescription
 import traceback
 
 class GlobalVals:
-    signaling = None
-    sub_channel_sig = None
-
-    pc = None
+    # -----parent-----
     sender_proc = None
     receiver_proc = None
+
+    # -----common (sender, receiver)-----
+    signaling = None
+    sub_channel_sig = None
+    pc = None
     args = None
     ws_protcol_str = "ws"
-
-    sctp_transport_established = False
     send_ws = None
     force_exited = False
     next_sender_handler_id = 0
-    remote_stdout_connected = False
-    remote_stdin_connected = False
-    done_reading = False
-    is_received_client_disconnect_request = False
 
+    # -----sender-----
+    sctp_transport_established = False
+
+    # -----receiver-----
+    remote_stdout_connected = False
+
+    # below has write access but does not have read access
+    is_received_client_disconnect_request = False
+    done_reading = False
+    remote_stdin_connected = False
 
 async def consume_signaling(pc, signaling):
     while True:
