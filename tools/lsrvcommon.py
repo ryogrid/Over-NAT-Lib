@@ -8,10 +8,7 @@ class GlobalVals:
     signaling = None
     sub_channel_sig = None
 
-    loop = None
     pc = None
-    signaling = None
-    colo = None
     sender_proc = None
     receiver_proc = None
     args = None
